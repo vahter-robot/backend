@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  labels:
+    app: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      imagePullSecrets:
+        - name: ghcr
+      containers:
+        - name: backend
+          image: busybox
+          command:
+            - /app/servicebin
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 80
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 80
+          ports:
+            - containerPort: 80
+              name: http
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 30m
+              memory: 30Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          env:
+            - name: SERVICE
+              value: backend
+            - name: HTTP_PORT
+              valueFrom:
+                configMapKeyRef:
+                  key: port
+                  name: http
+            - name: MONGODB_URL
+              valueFrom:
+                configMapKeyRef:
+                  key: url
+                  name: mongodb
+            - name: LOGLEVEL
+              value: debug

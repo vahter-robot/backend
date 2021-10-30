@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: backend
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: letsencrypt
+spec:
+  tls:
+    - hosts:
+        - vahter-robot.shopgrip.ru
+      secretName: vahter-robot-shopgrip-tls
+  rules:
+    - host: vahter-robot.shopgrip.ru
+      http:
+        paths:
+          - path: /master-bot
+            pathType: Prefix
+            backend:
+              serviceName: master-bot
+              servicePort: 80
+          - path: /slave-bot
+            pathType: Prefix
+            backend:
+              serviceName: slave-bot
+              servicePort: 81
