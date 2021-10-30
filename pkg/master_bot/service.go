@@ -186,8 +186,8 @@ func (b *bot) deleteBotHandler(msg *tb.Message) {
 
 		text += fmt.Sprintf(`
 
-%s
-%s`, api.Self.UserName, b2.ID.Hex())
+ID       /%s
+Username @%s`, b2.ID.Hex(), api.Self.UserName)
 	}
 
 	b.replyOK(msg, text)
