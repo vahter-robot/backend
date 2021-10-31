@@ -15,13 +15,13 @@ spec:
     - host: vahter-robot.shopgrip.ru
       http:
         paths:
-          - path: /master-bot
+          - path: /parent-bot
             pathType: Prefix
             backend:
-              serviceName: master-bot
+              serviceName: parent-bot
               servicePort: 80
-          - path: /slave-bot
+          - path: /child-bot
             pathType: Prefix
             backend:
-              serviceName: slave-bot
+              serviceName: child-bot
               servicePort: 81

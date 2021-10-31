@@ -1,4 +1,4 @@
-package slave_state
+package user
 
 import (
 	"context"
@@ -10,20 +10,11 @@ import (
 	"time"
 )
 
-type State struct {
-	ID           primitive.ObjectID `bson:"_id,omitempty"`
-	MasterUserID primitive.ObjectID `bson:"mui,omitempty"`
-	SlaveBotID   primitive.ObjectID `bson:"sbi,omitempty"`
-	Scene        Scene              `bson:"s,omitempty"`
+type User struct {
+	ID       primitive.ObjectID `bson:"_id,omitempty"`
+	TgUserID int64              `bson:"tui,omitempty"`
+	TgChatID int64              `bson:"tci,omitempty"`
 }
-
-type Scene uint32
-
-const (
-	None             Scene = 1
-	SetStartReaction Scene = 2
-	SetKeywords      Scene = 3
-)
 
 type Repo struct {
 	coll *mongo.Collection
@@ -31,7 +22,7 @@ type Repo struct {
 
 func NewRepo(ctx context.Context, db *mongo.Database, createIndex bool) (*Repo, error) {
 	r := &Repo{
-		coll: db.Collection("slave_state"),
+		coll: db.Collection("users"),
 	}
 
 	if createIndex {
@@ -46,13 +37,9 @@ func NewRepo(ctx context.Context, db *mongo.Database, createIndex bool) (*Repo, 
 
 func (r *Repo) createIndex(ctx context.Context) error {
 	_, err := r.coll.Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys: bson.D{{
-			Key:   "mui",
-			Value: 1,
-		}, {
-			Key:   "sbi",
-			Value: 1,
-		}},
+		Keys: bson.M{
+			"tui": 1,
+		},
 		Options: options.Index().SetUnique(true),
 	})
 	if err != nil {
@@ -62,38 +49,45 @@ func (r *Repo) createIndex(ctx context.Context) error {
 	return nil
 }
 
-func (r *Repo) SetScene(c context.Context, userID primitive.ObjectID, sc Scene) error {
+func (r *Repo) Create(c context.Context, tgUserID, tgChatID int64) (User, error) {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()
 
+	z := User{}
+
 	_, err := r.coll.UpdateOne(ctx, bson.M{
-		"mui": userID,
+		"tui": tgUserID,
 	}, bson.M{
-		"$set": State{
-			Scene: sc,
+		"$set": bson.M{
+			"tci": tgChatID,
 		},
 	}, options.Update().SetUpsert(true))
 	if err != nil {
-		return fmt.Errorf("r.coll.UpdateOne: %w", err)
+		return z, fmt.Errorf("r.coll.UpdateOne: %w", err)
 	}
 
-	return nil
+	var usr User
+	err = r.coll.FindOne(ctx, bson.M{
+		"tui": tgUserID,
+	}).Decode(&usr)
+	if err != nil {
+		return z, fmt.Errorf("r.coll.FindOne: %w", err)
+	}
+
+	return usr, nil
 }
 
-func (r *Repo) GetScene(c context.Context, userID primitive.ObjectID) (Scene, error) {
+func (r *Repo) GetByID(c context.Context, id primitive.ObjectID) (User, error) {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()
 
-	var st State
+	var usr User
 	err := r.coll.FindOne(ctx, bson.M{
-		"mui": userID,
-	}).Decode(&st)
+		"_id": id,
+	}).Decode(&usr)
 	if err != nil {
-		if errors.Is(err, mongo.ErrNoDocuments) {
-			return None, nil
-		}
-		return 0, fmt.Errorf("r.coll.FindOne: %w", err)
+		return User{}, fmt.Errorf("r.coll.FindOne: %w", err)
 	}
 
-	return st.Scene, nil
+	return usr, nil
 }

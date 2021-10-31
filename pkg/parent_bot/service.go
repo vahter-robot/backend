@@ -1,108 +1,108 @@
-package master_bot
+package parent_bot
 
 import (
 	"context"
 	"fmt"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/rs/zerolog"
-	"github.com/vahter-robot/backend/pkg/master_state"
-	"github.com/vahter-robot/backend/pkg/master_user"
-	"github.com/vahter-robot/backend/pkg/slave_bot"
+	"github.com/vahter-robot/backend/pkg/child_bot"
+	"github.com/vahter-robot/backend/pkg/parent_state"
+	"github.com/vahter-robot/backend/pkg/user"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	tb "gopkg.in/tucnak/telebot.v2"
+	"net"
 	"strings"
 	"time"
 )
 
-type bot struct {
+type service struct {
 	bot             *tb.Bot
 	httpHost        string
 	tokenPrefix     string
-	masterStateRepo *master_state.Repo
-	masterUserRepo  *master_user.Repo
-	slaveBotRepo    *slave_bot.Repo
-	slaveBotPath    string
+	parentStateRepo *parent_state.Repo
+	userRepo        *user.Repo
+	childBotRepo    *child_bot.Repo
+	childBotPath    string
+	childBotsLimit  uint16
 	logger          zerolog.Logger
 }
 
 const (
-	help      = "/help"
 	start     = "/start"
+	help      = "/help"
 	createBot = "/new_bot"
 	deleteBot = "/delete_bot"
 	cleanup   = "/cleanup"
-
-	maxBots = 10
 )
 
 func NewService(
 	logger zerolog.Logger,
 	httpHost,
 	tokenPrefix,
-	masterBotPath,
-	masterHTTPPort,
-	masterBotToken string,
-	masterStateRepo *master_state.Repo,
-	masterUserRepo *master_user.Repo,
-	slaveBotRepo *slave_bot.Repo,
-	slaveBotPath string,
+	parentBotPath,
+	parentHTTPPort,
+	parentBotToken string,
+	parentStateRepo *parent_state.Repo,
+	userRepo *user.Repo,
+	childBotRepo *child_bot.Repo,
+	childBotPath string,
+	childBotsLimit uint16,
 ) (
-	*bot,
+	*service,
 	error,
 ) {
-	publicURL := fmt.Sprintf("%s/%s/%s/%s", httpHost, masterBotPath, tokenPrefix, masterBotToken)
+	publicURL := fmt.Sprintf("%s/%s/%s/%s", httpHost, parentBotPath, tokenPrefix, parentBotToken)
 	poller := &tb.Webhook{
-		Listen: "0.0.0.0:" + masterHTTPPort,
+		Listen: net.JoinHostPort("0.0.0.0", parentHTTPPort),
 		Endpoint: &tb.WebhookEndpoint{
 			PublicURL: publicURL,
 		},
 	}
 
 	b, err := tb.NewBot(tb.Settings{
-		Token:  masterBotToken,
+		Token:  parentBotToken,
 		Poller: poller,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("tb.NewBot: %w", err)
 	}
 
-	return &bot{
+	return &service{
 		bot:             b,
 		httpHost:        httpHost,
-		masterStateRepo: masterStateRepo,
-		masterUserRepo:  masterUserRepo,
-		slaveBotRepo:    slaveBotRepo,
-		slaveBotPath:    slaveBotPath,
-		logger:          logger.With().Str("package", "master_bot").Logger(),
+		parentStateRepo: parentStateRepo,
+		userRepo:        userRepo,
+		childBotRepo:    childBotRepo,
+		childBotPath:    childBotPath,
+		childBotsLimit:  childBotsLimit,
+		logger:          logger.With().Str("package", "parent_bot").Logger(),
 	}, nil
 }
 
-func (b *bot) Serve(ctx context.Context) {
+func (b *service) Serve(ctx context.Context) {
 	b.initHandlers()
 	go func() {
 		<-ctx.Done()
 		b.bot.Stop()
 	}()
-	b.logger.Debug().Msg("bot started")
 	b.bot.Start()
-	b.logger.Debug().Msg("bot stopped")
 }
 
-func (b *bot) createBotHandler(msg *tb.Message) {
-	if !hasSenderID(msg) {
+func (b *service) handleCreateBot(msg *tb.Message) {
+	if !hasIDs(msg) {
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	usr, err := b.masterUserRepo.Create(ctx, int64(msg.Sender.ID))
+	usr, err := b.userRepo.Create(ctx, int64(msg.Sender.ID), msg.Chat.ID)
 	if err != nil {
 		b.replyFatalErr(msg, err)
 		return
 	}
 
-	err = b.masterStateRepo.SetScene(ctx, usr.ID, master_state.CreateBot)
+	err = b.parentStateRepo.SetScene(ctx, usr.ID, parent_state.CreateBot)
 	if err != nil {
 		b.replyFatalErr(msg, err)
 		return
@@ -110,27 +110,27 @@ func (b *bot) createBotHandler(msg *tb.Message) {
 
 	b.reply(msg, fmt.Sprintf(
 		"%s, давайте создадим вашего Вахтёр-бота. Перейдите в @BotFather, создайте бота (команда "+
-			"`newbot`) и отправьте сюда токен бота. Токен выглядит примерно так: "+
+			"`newbot`) и отправьте в чат токен бота. Токен выглядит примерно так: "+
 			"`123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11`",
 		msg.Sender.FirstName,
 	))
 }
 
-func (b *bot) helpHandler(msg *tb.Message) {
-	if !hasSenderID(msg) {
+func (b *service) handleHelp(msg *tb.Message) {
+	if !hasIDs(msg) {
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	usr, err := b.masterUserRepo.Create(ctx, int64(msg.Sender.ID))
+	usr, err := b.userRepo.Create(ctx, int64(msg.Sender.ID), msg.Chat.ID)
 	if err != nil {
 		b.replyFatalErr(msg, err)
 		return
 	}
 
-	err = b.masterStateRepo.SetScene(ctx, usr.ID, master_state.None)
+	err = b.parentStateRepo.SetScene(ctx, usr.ID, parent_state.None)
 	if err != nil {
 		b.replyFatalErr(msg, err)
 		return
@@ -145,34 +145,36 @@ func (b *bot) helpHandler(msg *tb.Message) {
 Для настройки конкретного бота, используйте чат с ним.`, createBot, deleteBot, help))
 }
 
-func (b *bot) deleteBotHandler(msg *tb.Message) {
-	if !hasSenderID(msg) {
+func (b *service) handleDeleteBot(msg *tb.Message) {
+	if !hasIDs(msg) {
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	usr, err := b.masterUserRepo.Create(ctx, int64(msg.Sender.ID))
+	usr, err := b.userRepo.Create(ctx, int64(msg.Sender.ID), msg.Chat.ID)
 	if err != nil {
 		b.replyFatalErr(msg, err)
 		return
 	}
 
-	err = b.masterStateRepo.SetScene(ctx, usr.ID, master_state.DeleteBot)
+	err = b.parentStateRepo.SetScene(ctx, usr.ID, parent_state.DeleteBot)
 	if err != nil {
 		b.replyFatalErr(msg, err)
 		return
 	}
 
-	bots, err := b.slaveBotRepo.Get(ctx, usr.ID)
+	bots, err := b.childBotRepo.GetByUserID(ctx, usr.ID)
 	if err != nil {
 		b.replyFatalErr(msg, err)
 		return
 	}
 
 	text := fmt.Sprintf(
-		"Список ваших ботов. Кликните на ID чтобы удалить бота. Нажмите %s чтобы выйти в меню",
+		"Список ваших ботов (%d/%d). Кликните на ID чтобы удалить бота. Нажмите %s чтобы выйти в меню",
+		len(bots),
+		b.childBotsLimit,
 		help,
 	)
 	for _, b2 := range bots {
@@ -193,21 +195,21 @@ Username @%s`, b2.ID.Hex(), api.Self.UserName)
 	b.replyOK(msg, text)
 }
 
-func (b *bot) cleanupHandler(msg *tb.Message) {
-	if !hasSenderID(msg) {
+func (b *service) handleCleanup(msg *tb.Message) {
+	if !hasIDs(msg) {
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	usr, err := b.masterUserRepo.Create(ctx, int64(msg.Sender.ID))
+	usr, err := b.userRepo.Create(ctx, int64(msg.Sender.ID), msg.Chat.ID)
 	if err != nil {
 		b.replyFatalErr(msg, err)
 		return
 	}
 
-	bots, err := b.slaveBotRepo.Get(ctx, usr.ID)
+	bots, err := b.childBotRepo.GetByUserID(ctx, usr.ID)
 	if err != nil {
 		b.replyFatalErr(msg, err)
 		return
@@ -216,7 +218,7 @@ func (b *bot) cleanupHandler(msg *tb.Message) {
 	for _, b2 := range bots {
 		_, e := tgbotapi.NewBotAPI(b2.Token)
 		if e != nil {
-			er := b.deleteSlaveBot(ctx, usr.ID, b2.ID)
+			er := b.deleteChildBot(ctx, usr.ID, b2.ID)
 			if er != nil {
 				b.replyFatalErr(msg, er)
 				return
@@ -227,36 +229,36 @@ func (b *bot) cleanupHandler(msg *tb.Message) {
 	b.replyOK(msg, fmt.Sprintf("Боты с некорректными токенами удалены. %s", help))
 }
 
-func (b *bot) deleteSlaveBot(ctx context.Context, masterUserID, slaveBotID primitive.ObjectID) error {
-	err := b.slaveBotRepo.Delete(ctx, masterUserID, slaveBotID)
+func (b *service) deleteChildBot(ctx context.Context, userID, childBotID primitive.ObjectID) error {
+	err := b.childBotRepo.Delete(ctx, userID, childBotID)
 	if err != nil {
-		return fmt.Errorf("b.slaveBotRepo.Delete: %w", err)
+		return fmt.Errorf("b.childBotRepo.Delete: %w", err)
 	}
 	return nil
 }
 
-func (b *bot) onTextHandler(msg *tb.Message) {
-	if !hasSenderID(msg) {
+func (b *service) handleOnText(msg *tb.Message) {
+	if !hasIDs(msg) {
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	usr, err := b.masterUserRepo.Create(ctx, int64(msg.Sender.ID))
+	usr, err := b.userRepo.Create(ctx, int64(msg.Sender.ID), msg.Chat.ID)
 	if err != nil {
 		b.replyFatalErr(msg, err)
 		return
 	}
 
-	scene, err := b.masterStateRepo.GetScene(ctx, usr.ID)
+	scene, err := b.parentStateRepo.GetScene(ctx, usr.ID)
 	if err != nil {
 		b.replyFatalErr(msg, err)
 		return
 	}
 
 	switch scene {
-	case master_state.CreateBot:
+	case parent_state.CreateBot:
 		const invalidBotToken = "Некорректный токен бота"
 
 		token := msg.Text
@@ -265,15 +267,16 @@ func (b *bot) onTextHandler(msg *tb.Message) {
 			return
 		}
 
-		count, e := b.slaveBotRepo.CountByMasterUserID(ctx, usr.ID)
+		count, e := b.childBotRepo.CountByUserID(ctx, usr.ID)
 		if e != nil {
 			b.replyFatalErr(msg, e)
 			return
 		}
 
-		if count >= maxBots {
+		if count >= int64(b.childBotsLimit) {
 			b.replyErr(msg, fmt.Sprintf("Максимальное количество ботов — %d, чтобы добавить нового "+
-				"удалите одного из текущих %s", maxBots, deleteBot))
+				"удалите одного из текущих %s", b.childBotsLimit, deleteBot))
+			return
 		}
 
 		api, e := tgbotapi.NewBotAPI(token)
@@ -282,60 +285,64 @@ func (b *bot) onTextHandler(msg *tb.Message) {
 			return
 		}
 
-		e = b.slaveBotRepo.Create(ctx, usr.ID, token)
+		e = b.childBotRepo.Create(ctx, usr.ID, token)
 		if e != nil {
 			b.replyFatalErr(msg, e)
 			return
 		}
 
 		_, e = api.SetWebhook(tgbotapi.NewWebhook(fmt.Sprintf(
-			"%s/%s/%s/%s", b.httpHost, b.slaveBotPath, b.tokenPrefix, token,
+			"%s/%s/%s/%s", b.httpHost, b.childBotPath, b.tokenPrefix, token,
 		)))
 		if e != nil {
 			b.replyFatalErr(msg, e)
 			return
 		}
 
-		e = b.masterStateRepo.SetScene(ctx, usr.ID, master_state.None)
+		e = b.parentStateRepo.SetScene(ctx, usr.ID, parent_state.None)
 		if e != nil {
 			b.replyFatalErr(msg, e)
 			return
 		}
 
 		b.replyOK(msg, "Бот создан. Настройте его в чате с @"+api.Self.UserName)
-	case master_state.DeleteBot:
+	case parent_state.DeleteBot:
 		botID, e := primitive.ObjectIDFromHex(strings.Replace(msg.Text, "/", "", 1))
 		if e != nil {
 			b.replyErr(msg, "Некорректный ID бота")
 			return
 		}
 
-		e = b.deleteSlaveBot(ctx, usr.ID, botID)
+		e = b.deleteChildBot(ctx, usr.ID, botID)
 		if e != nil {
 			b.replyFatalErr(msg, e)
 			return
 		}
 
 		b.replyOK(msg, withHelp("Бот удален"))
+	default:
+		b.replyErr(msg, "Неизвестная команда")
+		return
 	}
 }
 
-func (b *bot) initHandlers() {
-	b.bot.Handle(start, b.createBotHandler)
-	b.bot.Handle(help, b.helpHandler)
-	b.bot.Handle(createBot, b.createBotHandler)
-	b.bot.Handle(deleteBot, b.deleteBotHandler)
-	b.bot.Handle(cleanup, b.cleanupHandler)
-	b.bot.Handle(tb.OnText, b.onTextHandler)
+func (b *service) initHandlers() {
+	b.bot.Handle(start, b.handleCreateBot)
+	b.bot.Handle(help, b.handleHelp)
+	b.bot.Handle(createBot, b.handleCreateBot)
+	b.bot.Handle(deleteBot, b.handleDeleteBot)
+	b.bot.Handle(cleanup, b.handleCleanup)
+	b.bot.Handle(tb.OnText, b.handleOnText)
 }
 
-func (b *bot) reply(msg *tb.Message, text string) bool {
+func (b *service) reply(msg *tb.Message, text string) bool {
 	if msg == nil {
 		return false
 	}
 
 	_, err := b.bot.Send(msg.Sender, text, &tb.SendOptions{
-		ReplyTo: msg,
+		ReplyTo:   msg,
+		ParseMode: tb.ModeMarkdown,
 	})
 	if err != nil {
 		b.logger.Error().Err(err)
@@ -344,16 +351,16 @@ func (b *bot) reply(msg *tb.Message, text string) bool {
 	return true
 }
 
-func (b *bot) replyOK(msg *tb.Message, str string) bool {
+func (b *service) replyOK(msg *tb.Message, str string) bool {
 	return b.reply(msg, "OK. "+str)
 }
 
-func (b *bot) replyErr(msg *tb.Message, str string) bool {
+func (b *service) replyErr(msg *tb.Message, str string) bool {
 	return b.reply(msg, fmt.Sprintf(`Ошибка. %s
 %s`, str, help))
 }
 
-func (b *bot) replyFatalErr(msg *tb.Message, err error) bool {
+func (b *service) replyFatalErr(msg *tb.Message, err error) bool {
 	b.logger.Error().Err(err).Send()
 	return b.reply(msg, fmt.Sprintf(
 		`Произошла ошибка, мы уже знаем о ней и работаем над исправлением
@@ -362,8 +369,8 @@ func (b *bot) replyFatalErr(msg *tb.Message, err error) bool {
 	))
 }
 
-func hasSenderID(msg *tb.Message) bool {
-	return msg != nil && msg.Sender != nil && msg.Sender.ID != 0
+func hasIDs(msg *tb.Message) bool {
+	return msg != nil && msg.Sender != nil && msg.Sender.ID != 0 && msg.Chat != nil && msg.Chat.ID != 0
 }
 
 func withHelp(str string) string {

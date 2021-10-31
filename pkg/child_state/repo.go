@@ -1,4 +1,4 @@
-package master_state
+package child_state
 
 import (
 	"context"
@@ -12,17 +12,18 @@ import (
 )
 
 type State struct {
-	ID           primitive.ObjectID `bson:"_id,omitempty"`
-	MasterUserID primitive.ObjectID `bson:"mui,omitempty"`
-	Scene        Scene              `bson:"s,omitempty"`
+	ID         primitive.ObjectID `bson:"_id,omitempty"`
+	UserID     primitive.ObjectID `bson:"ui,omitempty"`
+	ChildBotID primitive.ObjectID `bson:"cbi,omitempty"`
+	Scene      Scene              `bson:"s,omitempty"`
 }
 
 type Scene uint32
 
 const (
-	None      Scene = 1
-	CreateBot Scene = 2
-	DeleteBot Scene = 3
+	None        Scene = 1
+	SetStart    Scene = 2
+	SetKeywords Scene = 3
 )
 
 type Repo struct {
@@ -31,7 +32,7 @@ type Repo struct {
 
 func NewRepo(ctx context.Context, db *mongo.Database, createIndex bool) (*Repo, error) {
 	r := &Repo{
-		coll: db.Collection("master_state"),
+		coll: db.Collection("child_state"),
 	}
 
 	if createIndex {
@@ -46,9 +47,13 @@ func NewRepo(ctx context.Context, db *mongo.Database, createIndex bool) (*Repo, 
 
 func (r *Repo) createIndex(ctx context.Context) error {
 	_, err := r.coll.Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys: bson.M{
-			"mui": 1,
-		},
+		Keys: bson.D{{
+			Key:   "ui",
+			Value: 1,
+		}, {
+			Key:   "cbi",
+			Value: 1,
+		}},
 		Options: options.Index().SetUnique(true),
 	})
 	if err != nil {
@@ -58,15 +63,16 @@ func (r *Repo) createIndex(ctx context.Context) error {
 	return nil
 }
 
-func (r *Repo) SetScene(c context.Context, userID primitive.ObjectID, sc Scene) error {
+func (r *Repo) SetScene(c context.Context, userID, childBotID primitive.ObjectID, sc Scene) error {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()
 
 	_, err := r.coll.UpdateOne(ctx, bson.M{
-		"mui": userID,
+		"ui":  userID,
+		"cbi": childBotID,
 	}, bson.M{
-		"$set": State{
-			Scene: sc,
+		"$set": bson.M{
+			"s": sc,
 		},
 	}, options.Update().SetUpsert(true))
 	if err != nil {
@@ -76,13 +82,14 @@ func (r *Repo) SetScene(c context.Context, userID primitive.ObjectID, sc Scene) 
 	return nil
 }
 
-func (r *Repo) GetScene(c context.Context, userID primitive.ObjectID) (Scene, error) {
+func (r *Repo) GetScene(c context.Context, userID, childBotID primitive.ObjectID) (Scene, error) {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()
 
 	var st State
 	err := r.coll.FindOne(ctx, bson.M{
-		"mui": userID,
+		"ui":  userID,
+		"cbi": childBotID,
 	}).Decode(&st)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {

@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: master-bot
+  name: parent-bot
   labels:
     app: backend
 spec:
@@ -15,7 +15,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: slave-bot
+  name: child-bot
   labels:
     app: backend
 spec:

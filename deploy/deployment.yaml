@@ -24,14 +24,17 @@ spec:
           livenessProbe:
             httpGet:
               path: /healthz
-              port: 80
+              port: 81
           readinessProbe:
             httpGet:
               path: /healthz
-              port: 80
+              port: 81
           ports:
             - containerPort: 80
-              name: http
+              name: parent-bot
+              protocol: TCP
+            - containerPort: 81
+              name: child-bot
               protocol: TCP
           resources:
             requests:

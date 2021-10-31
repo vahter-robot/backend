@@ -23,7 +23,7 @@ type mongodb struct {
 }
 
 type telegram struct {
-	MasterBotToken string
+	ParentBotToken string
 }
 
 func NewConfig() (Config, error) {
