@@ -2,6 +2,7 @@ package child_bot
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -179,7 +180,7 @@ func (r *Repo) Get(c context.Context) chan Item {
 	return res
 }
 
-func (r *Repo) GetByToken(c context.Context, token string) (Bot, error) {
+func (r *Repo) GetByToken(c context.Context, token string) (Bot, bool, error) {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()
 
@@ -188,10 +189,14 @@ func (r *Repo) GetByToken(c context.Context, token string) (Bot, error) {
 		"t": token,
 	}).Decode(&bot)
 	if err != nil {
-		return Bot{}, fmt.Errorf("r.coll.Find: %w", err)
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return Bot{}, false, nil
+		}
+
+		return Bot{}, false, fmt.Errorf("r.coll.Find: %w", err)
 	}
 
-	return bot, nil
+	return bot, true, nil
 }
 
 func (r *Repo) SetWebhookNow(c context.Context, id primitive.ObjectID) error {

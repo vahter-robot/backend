@@ -137,11 +137,14 @@ func (s *service) Serve(ctx context.Context, setWebhooks bool) error {
 
 		token := strings.TrimPrefix(r.URL.Path, tokenPrefixPath)
 
-		err := s.handle(rc, token, r.Body)
+		whOK, err := s.handle(rc, token, r.Body)
 		if err != nil {
 			s.logger.Warn().Err(err).Send()
 		}
 
+		if !whOK {
+			w.WriteHeader(http.StatusNotFound)
+		}
 		_, err = w.Write(nil)
 		if err != nil {
 			s.logger.Error().Err(err).Send()
@@ -199,7 +202,7 @@ type from struct {
 	Username  string `json:"username"`
 }
 
-func (s *service) handle(ctx context.Context, token string, body io.ReadCloser) error {
+func (s *service) handle(ctx context.Context, token string, body io.ReadCloser) (bool, error) {
 	defer func() {
 		err := body.Close()
 		if err != nil {
@@ -209,7 +212,7 @@ func (s *service) handle(ctx context.Context, token string, body io.ReadCloser) 
 
 	b, err := io.ReadAll(body)
 	if err != nil {
-		return fmt.Errorf("io.ReadAll: %w", err)
+		return true, fmt.Errorf("io.ReadAll: %w", err)
 	}
 
 	s.logger.Debug().Str("body", string(b)).Send()
@@ -217,16 +220,19 @@ func (s *service) handle(ctx context.Context, token string, body io.ReadCloser) 
 	var upd update
 	err = json.Unmarshal(b, &upd)
 	if err != nil {
-		return fmt.Errorf("json.Unmarshal: %w", err)
+		return true, fmt.Errorf("json.Unmarshal: %w", err)
 	}
 
 	if upd.Message.Text == "" {
-		return nil
+		return true, nil
 	}
 
-	bot, err := s.childBotRepo.GetByToken(ctx, token)
+	bot, found, err := s.childBotRepo.GetByToken(ctx, token)
 	if err != nil {
-		return fmt.Errorf("s.childBotRepo.GetByToken: %w", err)
+		return true, fmt.Errorf("s.childBotRepo.GetByToken: %w", err)
+	}
+	if !found {
+		return false, nil
 	}
 
 	var eg errgroup.Group
@@ -251,22 +257,22 @@ func (s *service) handle(ctx context.Context, token string, body io.ReadCloser) 
 	})
 	err = eg.Wait()
 	if err != nil {
-		return fmt.Errorf("eg.Wait: %w", err)
+		return true, fmt.Errorf("eg.Wait: %w", err)
 	}
 
 	switch upd.Message.From.ID {
 	case owner.TgUserID:
 		err = s.handleOwner(ctx, api, upd, bot, owner)
 		if err != nil {
-			return fmt.Errorf("s.handleOwner: %w", err)
+			return true, fmt.Errorf("s.handleOwner: %w", err)
 		}
 	default:
 		err = s.handlePeer(ctx, api, upd, bot)
 		if err != nil {
-			return fmt.Errorf("s.handlePeer: %w", err)
+			return true, fmt.Errorf("s.handlePeer: %w", err)
 		}
 	}
-	return nil
+	return true, nil
 }
 
 func (s *service) handleOwner(ctx context.Context, api *tgbotapi.BotAPI, upd update, bot Bot, owner user.User) error {
