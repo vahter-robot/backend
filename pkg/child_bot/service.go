@@ -127,12 +127,12 @@ func (s *service) Serve(ctx context.Context, setWebhooks bool) error {
 			s.logger.Error().Err(err).Send()
 		}
 	})
-	prefix := fmt.Sprintf("/%s/", s.childTokenPathPrefix)
-	mux.HandleFunc(prefix, func(w http.ResponseWriter, r *http.Request) {
+	pathPrefix := fmt.Sprintf("/%s/", s.childTokenPathPrefix)
+	mux.HandleFunc(pathPrefix, func(w http.ResponseWriter, r *http.Request) {
 		rc, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 		defer cancel()
 
-		token := strings.TrimPrefix(r.URL.Path, prefix)
+		token := strings.TrimPrefix(r.URL.Path, pathPrefix)
 
 		s.logger.Debug().Str("path", r.URL.Path).Str("token", token).Msg("got request")
 
