@@ -579,7 +579,7 @@ func (s *service) handleOwnerGetKeywords(
 %d
 ===%s
 
-%s`, len(bot.Keywords), bot.Mode, s.keywordsLimitPerBot, keywords, help))
+%s`, len(bot.Keywords), s.keywordsLimitPerBot, bot.Mode, keywords, help))
 	if err != nil {
 		return fmt.Errorf("s.reply: %w", err)
 	}
