@@ -83,7 +83,7 @@ const (
 
 	yes   = "да"
 	no    = "нет"
-	delim = "==="
+	delim = "\n===\n"
 	comma = ","
 )
 
