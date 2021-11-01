@@ -22,7 +22,6 @@ jobs:
           registry: ghcr.io
           repository: ${{ github.repository }}
           tag_with_ref: true
-          build_args: GH_CI_TOKEN=${{ secrets.GH_CI_TOKEN }}
 
       - name: Extract service name
         uses: bluwy/substitute-string-action@v1
