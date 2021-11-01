@@ -21,50 +21,53 @@ import (
 )
 
 type service struct {
-	httpHost          string
-	childHTTPPort     string
-	childBotPath      string
-	tokenPrefix       string
-	childStateRepo    *child_state.Repo
-	userRepo          *user.Repo
-	peerRepo          *peer.Repo
-	childBotRepo      *Repo
-	keywordsLimit     uint16
-	inLimit           uint16
-	outLimit          uint16
-	parentBotUsername string
-	logger            zerolog.Logger
+	httpHost             string
+	childHTTPPort        string
+	childBotPath         string
+	childTokenPathPrefix string
+	childStateRepo       *child_state.Repo
+	userRepo             *user.Repo
+	peerRepo             *peer.Repo
+	childBotRepo         *Repo
+	keywordsLimit        uint16
+	inLimitPerKeyword    uint16
+	inLimitChars         uint16
+	outLimitChars        uint16
+	parentBotUsername    string
+	logger               zerolog.Logger
 }
 
 func NewService(
+	logger zerolog.Logger,
 	httpHost,
 	childHTTPPort,
 	childBotPath,
-	tokenPrefix string,
+	childTokenPathPrefix string,
 	childStateRepo *child_state.Repo,
 	userRepo *user.Repo,
 	peerRepo *peer.Repo,
 	childBotRepo *Repo,
-	keywordsLimit,
-	inLimit,
-	outLimit uint16,
+	keywordsLimitPerBot,
+	inLimitPerKeyword,
+	inLimitChars,
+	outLimitChars uint16,
 	parentBotUsername string,
-	logger zerolog.Logger,
 ) *service {
 	return &service{
-		httpHost:          httpHost,
-		childBotPath:      childBotPath,
-		childHTTPPort:     childHTTPPort,
-		tokenPrefix:       tokenPrefix,
-		childStateRepo:    childStateRepo,
-		userRepo:          userRepo,
-		peerRepo:          peerRepo,
-		childBotRepo:      childBotRepo,
-		keywordsLimit:     keywordsLimit,
-		inLimit:           inLimit,
-		outLimit:          outLimit,
-		parentBotUsername: parentBotUsername,
-		logger:            logger.With().Str("package", "child_bot").Logger(),
+		httpHost:             httpHost,
+		childBotPath:         childBotPath,
+		childHTTPPort:        childHTTPPort,
+		childTokenPathPrefix: childTokenPathPrefix,
+		childStateRepo:       childStateRepo,
+		userRepo:             userRepo,
+		peerRepo:             peerRepo,
+		childBotRepo:         childBotRepo,
+		keywordsLimit:        keywordsLimitPerBot,
+		inLimitPerKeyword:    inLimitPerKeyword,
+		inLimitChars:         inLimitChars,
+		outLimitChars:        outLimitChars,
+		parentBotUsername:    parentBotUsername,
+		logger:               logger.With().Str("package", "child_bot").Logger(),
 	}
 }
 
@@ -103,7 +106,7 @@ func (s *service) Serve(ctx context.Context) error {
 			}
 
 			_, err = api.SetWebhook(tgbotapi.NewWebhook(fmt.Sprintf(
-				"%s/%s/%s/%s", s.httpHost, s.childBotPath, s.tokenPrefix, item.Doc.Token,
+				"%s/%s/%s/%s", s.httpHost, s.childBotPath, s.childTokenPathPrefix, item.Doc.Token,
 			)))
 			if err != nil {
 				s.logger.Warn().Err(err).Send()
@@ -119,7 +122,7 @@ func (s *service) Serve(ctx context.Context) error {
 	}()
 
 	mux := http.NewServeMux()
-	tokenPrefixPath := fmt.Sprintf("/%s/", s.tokenPrefix)
+	tokenPrefixPath := fmt.Sprintf("/%s/", s.childTokenPathPrefix)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		_, err := w.Write(nil)
 		if err != nil {
@@ -330,107 +333,107 @@ func (s *service) handleOwner(ctx context.Context, api *tgbotapi.BotAPI, upd upd
 
 	switch text {
 	case start, setStart:
-		err := s.handleOwnerStart(ctx, api, upd, bot, owner)
-		if err != nil {
-			return fmt.Errorf("s.handleOwnerStart: %w", err)
+		e := s.handleOwnerStart(ctx, api, upd, bot, owner)
+		if e != nil {
+			return fmt.Errorf("s.handleOwnerStart: %w", e)
 		}
 	case help:
-		err := s.handleOwnerHelp(ctx, api, upd, bot, owner)
-		if err != nil {
-			return fmt.Errorf("s.handleOwnerHelp: %w", err)
+		e := s.handleOwnerHelp(ctx, api, upd, bot, owner)
+		if e != nil {
+			return fmt.Errorf("s.handleOwnerHelp: %w", e)
 		}
 	case setKeywords:
-		err := s.handleOwnerSetKeywords(ctx, api, upd, bot, owner)
-		if err != nil {
-			return fmt.Errorf("s.handleOwnerSetKeywords: %w", err)
+		e := s.handleOwnerSetKeywords(ctx, api, upd, bot, owner)
+		if e != nil {
+			return fmt.Errorf("s.handleOwnerSetKeywords: %w", e)
 		}
 	case getKeywords:
-		err := s.handleOwnerGetKeywords(api, upd, bot)
-		if err != nil {
-			return fmt.Errorf("s.handleOwnerGetKeywords: %w", err)
+		e := s.handleOwnerGetKeywords(api, upd, bot)
+		if e != nil {
+			return fmt.Errorf("s.handleOwnerGetKeywords: %w", e)
 		}
 	case getStart:
-		err := s.handleOwnerGetStart(api, upd, bot)
-		if err != nil {
-			return fmt.Errorf("s.handleOwnerGetStart: %w", err)
+		e := s.handleOwnerGetStart(api, upd, bot)
+		if e != nil {
+			return fmt.Errorf("s.handleOwnerGetStart: %w", e)
 		}
 	default:
-		scene, err := s.childStateRepo.GetScene(ctx, owner.ID, bot.ID)
-		if err != nil {
-			return fmt.Errorf("s.childStateRepo.GetScene: %w", err)
+		scene, e := s.childStateRepo.GetScene(ctx, owner.ID, bot.ID)
+		if e != nil {
+			return fmt.Errorf("s.childStateRepo.GetScene: %w", e)
 		}
 
 		switch scene {
 		case child_state.SetStart:
-			err = s.childBotRepo.SetOnPeerStart(ctx, bot.ID, text)
-			if err != nil {
-				return fmt.Errorf("s.childBotRepo.SetOnPeerStart: %w", err)
+			e = s.childBotRepo.SetOnPeerStart(ctx, bot.ID, text)
+			if e != nil {
+				return fmt.Errorf("s.childBotRepo.SetOnPeerStart: %w", e)
 			}
 
 			if !bot.SetupDone {
-				err = s.handleOwnerSetKeywords(ctx, api, upd, bot, owner)
-				if err != nil {
-					return fmt.Errorf("s.handleOwnerSetKeywords: %w", err)
+				e = s.handleOwnerSetKeywords(ctx, api, upd, bot, owner)
+				if e != nil {
+					return fmt.Errorf("s.handleOwnerSetKeywords: %w", e)
 				}
 				return nil
 			}
 
-			err = s.childStateRepo.SetScene(ctx, owner.ID, bot.ID, child_state.None)
-			if err != nil {
-				return fmt.Errorf("s.childBotRepo.SetOnPeerStart: %w", err)
+			e = s.childStateRepo.SetScene(ctx, owner.ID, bot.ID, child_state.None)
+			if e != nil {
+				return fmt.Errorf("s.childBotRepo.SetOnPeerStart: %w", e)
 			}
 
-			err = s.replyOK(api, upd, "Приветственное сообщение установлено")
-			if err != nil {
-				return fmt.Errorf("s.replyOK: %w", err)
+			e = s.replyOK(api, upd, "Приветственное сообщение установлено")
+			if e != nil {
+				return fmt.Errorf("s.replyOK: %w", e)
 			}
 			return nil
 		case child_state.SetKeywords:
 			kws, m, ok := s.parseKeywordsAndMode(text)
 			if !ok {
-				err = s.replyErr(api, upd, "Некорректный формат / не соблюдены лимиты. Пожалуйста, напишите "+
+				e = s.replyErr(api, upd, "Некорректный формат / не соблюдены лимиты. Пожалуйста, напишите "+
 					"аналогично примеру")
-				if err != nil {
-					return fmt.Errorf("s.replyErr: %w", err)
+				if e != nil {
+					return fmt.Errorf("s.replyErr: %w", e)
 				}
 				return nil
 			}
 
-			err = s.childBotRepo.SetKeywordsAndMode(ctx, bot.ID, kws, m)
-			if err != nil {
-				return fmt.Errorf("s.childBotRepo.SetKeywordsAndMode: %w", err)
+			e = s.childBotRepo.SetKeywordsAndMode(ctx, bot.ID, kws, m)
+			if e != nil {
+				return fmt.Errorf("s.childBotRepo.SetKeywordsAndMode: %w", e)
 			}
 
 			if !bot.SetupDone {
-				err = s.childBotRepo.SetSetupDoneTrue(ctx, bot.ID)
-				if err != nil {
-					return fmt.Errorf("s.childBotRepo.SetSetupDoneTrue: %w", err)
+				e = s.childBotRepo.SetSetupDoneTrue(ctx, bot.ID)
+				if e != nil {
+					return fmt.Errorf("s.childBotRepo.SetSetupDoneTrue: %w", e)
 				}
 			}
 
-			err = s.childStateRepo.SetScene(ctx, owner.ID, bot.ID, child_state.None)
-			if err != nil {
-				return fmt.Errorf("s.childBotRepo.SetOnPeerStart: %w", err)
+			e = s.childStateRepo.SetScene(ctx, owner.ID, bot.ID, child_state.None)
+			if e != nil {
+				return fmt.Errorf("s.childBotRepo.SetOnPeerStart: %w", e)
 			}
 
 			if !bot.SetupDone {
-				err = s.replyOK(api, upd, "Бот настроен и работает 👍. Опционально можно "+
+				e = s.replyOK(api, upd, "Бот настроен и работает 👍. Опционально можно "+
 					"установить аватар и описание через @BotFather")
-				if err != nil {
-					return fmt.Errorf("s.replyOK: %w", err)
+				if e != nil {
+					return fmt.Errorf("s.replyOK: %w", e)
 				}
 				return nil
 			}
 
-			err = s.replyOK(api, upd, "Ключевые слова установлены")
-			if err != nil {
-				return fmt.Errorf("s.replyOK: %w", err)
+			e = s.replyOK(api, upd, "Ключевые слова установлены")
+			if e != nil {
+				return fmt.Errorf("s.replyOK: %w", e)
 			}
 			return nil
 		default:
-			err = s.replyErr(api, upd, "Неизвестная команда")
-			if err != nil {
-				return fmt.Errorf("s.replyErr: %w", err)
+			e = s.replyErr(api, upd, "Неизвестная команда")
+			if e != nil {
+				return fmt.Errorf("s.replyErr: %w", e)
 			}
 			return nil
 		}
@@ -614,6 +617,7 @@ func (s *service) handlePeer(ctx context.Context, api *tgbotapi.BotAPI, upd upda
 		if e != nil {
 			return fmt.Errorf("s.reply: %w", e)
 		}
+		return nil
 	}
 
 	var match bool
@@ -788,13 +792,30 @@ func (s *service) parseKeywordsAndMode(in string) ([]Keyword, mode, bool) {
 	var keywords []Keyword
 	for i := 1; i < len(words); i += 3 {
 		out := words[i+1]
-		if utf8.RuneCountInString(out) > int(s.outLimit) {
+		if utf8.RuneCountInString(out) > int(s.outLimitChars) {
 			return nil, 0, false
 		}
 
 		rawInKws := strings.Split(words[i], comma)
-		if len(rawInKws) > int(s.inLimit) {
+		if len(rawInKws) > int(s.inLimitPerKeyword) {
 			return nil, 0, false
+		}
+
+		unique := map[string]struct{}{}
+		for _, kw := range rawInKws {
+			k := strings.TrimSpace(kw)
+			if k == "" || utf8.RuneCountInString(k) > int(s.inLimitChars) {
+				return nil, 0, false
+			}
+
+			unique[k] = struct{}{}
+		}
+
+		kwIn := make([]string, len(unique))
+		ix := 0
+		for kw := range unique {
+			kwIn[ix] = kw
+			ix += 1
 		}
 
 		ban, ok := ruToBool(words[i+2])
@@ -803,7 +824,7 @@ func (s *service) parseKeywordsAndMode(in string) ([]Keyword, mode, bool) {
 		}
 
 		keywords = append(keywords, Keyword{
-			In:  unique(rawInKws, strings.TrimSpace),
+			In:  kwIn,
 			Out: out,
 			Ban: ban,
 		})
@@ -813,21 +834,6 @@ func (s *service) parseKeywordsAndMode(in string) ([]Keyword, mode, bool) {
 	}
 
 	return keywords, m, true
-}
-
-func unique(in []string, fn func(string) string) []string {
-	m := map[string]struct{}{}
-	for _, s := range in {
-		m[fn(s)] = struct{}{}
-	}
-
-	res := make([]string, len(m))
-	i := 0
-	for key := range m {
-		res[i] = key
-		i += 1
-	}
-	return res
 }
 
 func tplName(in string) string {

@@ -16,15 +16,15 @@ import (
 )
 
 type service struct {
-	bot             *tb.Bot
-	httpHost        string
-	tokenPrefix     string
-	parentStateRepo *parent_state.Repo
-	userRepo        *user.Repo
-	childBotRepo    *child_bot.Repo
-	childBotPath    string
-	childBotsLimit  uint16
-	logger          zerolog.Logger
+	bot                   *tb.Bot
+	httpHost              string
+	parentStateRepo       *parent_state.Repo
+	userRepo              *user.Repo
+	childBotRepo          *child_bot.Repo
+	childBotPath          string
+	childTokenPathPrefix  string
+	childBotsLimitPerUser uint16
+	logger                zerolog.Logger
 }
 
 const (
@@ -38,20 +38,21 @@ const (
 func NewService(
 	logger zerolog.Logger,
 	httpHost,
-	tokenPrefix,
-	parentBotPath,
 	parentHTTPPort,
+	parentBotPath,
+	parentTokenPathPrefix,
 	parentBotToken string,
 	parentStateRepo *parent_state.Repo,
 	userRepo *user.Repo,
 	childBotRepo *child_bot.Repo,
-	childBotPath string,
-	childBotsLimit uint16,
+	childBotPath,
+	childTokenPathPrefix string,
+	childBotsLimitPerUser uint16,
 ) (
 	*service,
 	error,
 ) {
-	publicURL := fmt.Sprintf("%s/%s/%s/%s", httpHost, parentBotPath, tokenPrefix, parentBotToken)
+	publicURL := fmt.Sprintf("%s/%s/%s/%s", httpHost, parentBotPath, parentTokenPathPrefix, parentBotToken)
 	poller := &tb.Webhook{
 		Listen: net.JoinHostPort("0.0.0.0", parentHTTPPort),
 		Endpoint: &tb.WebhookEndpoint{
@@ -68,14 +69,15 @@ func NewService(
 	}
 
 	return &service{
-		bot:             b,
-		httpHost:        httpHost,
-		parentStateRepo: parentStateRepo,
-		userRepo:        userRepo,
-		childBotRepo:    childBotRepo,
-		childBotPath:    childBotPath,
-		childBotsLimit:  childBotsLimit,
-		logger:          logger.With().Str("package", "parent_bot").Logger(),
+		bot:                   b,
+		httpHost:              httpHost,
+		parentStateRepo:       parentStateRepo,
+		userRepo:              userRepo,
+		childBotRepo:          childBotRepo,
+		childBotPath:          childBotPath,
+		childTokenPathPrefix:  childTokenPathPrefix,
+		childBotsLimitPerUser: childBotsLimitPerUser,
+		logger:                logger.With().Str("package", "parent_bot").Logger(),
 	}, nil
 }
 
@@ -174,7 +176,7 @@ func (b *service) handleDeleteBot(msg *tb.Message) {
 	text := fmt.Sprintf(
 		"Список ваших ботов (%d/%d). Кликните на ID чтобы удалить бота. Нажмите %s чтобы выйти в меню",
 		len(bots),
-		b.childBotsLimit,
+		b.childBotsLimitPerUser,
 		help,
 	)
 	for _, b2 := range bots {
@@ -273,9 +275,9 @@ func (b *service) handleOnText(msg *tb.Message) {
 			return
 		}
 
-		if count >= int64(b.childBotsLimit) {
+		if count >= int64(b.childBotsLimitPerUser) {
 			b.replyErr(msg, fmt.Sprintf("Максимальное количество ботов — %d, чтобы добавить нового "+
-				"удалите одного из текущих %s", b.childBotsLimit, deleteBot))
+				"удалите одного из текущих %s", b.childBotsLimitPerUser, deleteBot))
 			return
 		}
 
@@ -292,7 +294,7 @@ func (b *service) handleOnText(msg *tb.Message) {
 		}
 
 		_, e = api.SetWebhook(tgbotapi.NewWebhook(fmt.Sprintf(
-			"%s/%s/%s/%s", b.httpHost, b.childBotPath, b.tokenPrefix, token,
+			"%s/%s/%s/%s", b.httpHost, b.childBotPath, b.childTokenPathPrefix, token,
 		)))
 		if e != nil {
 			b.replyFatalErr(msg, e)

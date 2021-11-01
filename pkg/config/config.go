@@ -6,24 +6,38 @@ import (
 )
 
 type Config struct {
-	Service  string
-	HTTP     http
-	MongoDB  mongodb
-	Telegram telegram
-	LogLevel string
+	Service   string
+	HTTP      http
+	MongoDB   mongodb
+	ParentBot parentBot
+	ChildBot  childBot
+	LogLevel  string
 }
 
 type http struct {
 	Host string
-	Port int
 }
 
 type mongodb struct {
 	URL string
 }
 
-type telegram struct {
-	ParentBotToken string
+type parentBot struct {
+	Port            string
+	Path            string
+	Token           string
+	TokenPathPrefix string
+}
+
+type childBot struct {
+	Port                string
+	Path                string
+	TokenPathPrefix     string
+	BotsLimitPerUser    uint16
+	KeywordsLimitPerBot uint16
+	InLimitPerKeyword   uint16
+	InLimitChars        uint16
+	OutLimitChars       uint16
 }
 
 func NewConfig() (Config, error) {

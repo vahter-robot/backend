@@ -38,7 +38,7 @@ spec:
               protocol: TCP
           resources:
             requests:
-              cpu: 30m
+              cpu: 50m
               memory: 30Mi
             limits:
               cpu: "1"
@@ -46,15 +46,63 @@ spec:
           env:
             - name: SERVICE
               value: backend
-            - name: HTTP_PORT
-              valueFrom:
-                configMapKeyRef:
-                  key: port
-                  name: http
+            - name: HTTP_HOST
+              value: https://vahter-robot.shopgrip.ru
             - name: MONGODB_URL
               valueFrom:
                 configMapKeyRef:
                   key: url
                   name: mongodb
+            - name: PARENTBOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  key: token
+                  name: parent-bot
+            - name: PARENTBOT_PORT
+              value: "80"
+            - name: PARENTBOT_PATH
+              value: /parent-bot
+            - name: PARENTBOT_TOKENPATHPREFIX
+              valueFrom:
+                configMapKeyRef:
+                  key: token-path-prefix
+                  name: parent-bot
+            - name: CHILDBOT_PORT
+              value: "81"
+            - name: CHILDBOT_PATH
+              value: /child-bot
+            - name: CHILDBOT_TOKENPATHPREFIX
+              valueFrom:
+                configMapKeyRef:
+                  key: token-path-prefix
+                  name: child-bot
+            - name: CHILDBOT_BOTSLIMITPERUSER
+              valueFrom:
+                configMapKeyRef:
+                  key: bots-limit-per-user
+                  name: child-bot
+            - name: CHILDBOT_KEYWORDSLIMITPERBOT
+              valueFrom:
+                configMapKeyRef:
+                  key: keywords-limit-per-bot
+                  name: child-bot
+            - name: CHILDBOT_INLIMITPERKEYWORD
+              valueFrom:
+                configMapKeyRef:
+                  key: in-limit-per-keyword
+                  name: child-bot
+            - name: CHILDBOT_INLIMITCHARS
+              valueFrom:
+                configMapKeyRef:
+                  key: in-limit-chars
+                  name: child-bot
+            - name: CHILDBOT_OUTLIMITCHARS
+              valueFrom:
+                configMapKeyRef:
+                  key: out-limit-chars
+                  name: child-bot
             - name: LOGLEVEL
-              value: debug
+              valueFrom:
+                configMapKeyRef:
+                  key: log-level
+                  name: backend

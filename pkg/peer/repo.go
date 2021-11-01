@@ -23,16 +23,14 @@ type Repo struct {
 	coll *mongo.Collection
 }
 
-func NewRepo(ctx context.Context, db *mongo.Database, createIndex bool) (*Repo, error) {
+func NewRepo(ctx context.Context, db *mongo.Database) (*Repo, error) {
 	r := &Repo{
 		coll: db.Collection("peers"),
 	}
 
-	if createIndex {
-		err := r.createIndex(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("r.createIndex: %w", err)
-		}
+	err := r.createIndex(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("r.createIndex: %w", err)
 	}
 
 	return r, nil
