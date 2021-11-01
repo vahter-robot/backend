@@ -343,11 +343,10 @@ func (b *service) reply(msg *tb.Message, text string) bool {
 	}
 
 	_, err := b.bot.Send(msg.Sender, text, &tb.SendOptions{
-		ReplyTo:   msg,
-		ParseMode: tb.ModeMarkdown,
+		ReplyTo: msg,
 	})
 	if err != nil {
-		b.logger.Error().Err(err)
+		b.logger.Error().Err(err).Send()
 		return false
 	}
 	return true
