@@ -28,7 +28,7 @@ type service struct {
 	userRepo             *user.Repo
 	peerRepo             *peer.Repo
 	childBotRepo         *Repo
-	keywordsLimit        uint16
+	keywordsLimitPerBot  uint16
 	inLimitPerKeyword    uint16
 	inLimitChars         uint16
 	outLimitChars        uint16
@@ -59,7 +59,7 @@ func NewService(
 		userRepo:             userRepo,
 		peerRepo:             peerRepo,
 		childBotRepo:         childBotRepo,
-		keywordsLimit:        keywordsLimitPerBot,
+		keywordsLimitPerBot:  keywordsLimitPerBot,
 		inLimitPerKeyword:    inLimitPerKeyword,
 		inLimitChars:         inLimitChars,
 		outLimitChars:        outLimitChars,
@@ -576,7 +576,7 @@ func (s *service) handleOwnerGetKeywords(
 Банить
 %s
 
-%s`, len(bot.Keywords), s.keywordsLimit, keywords, help))
+%s`, len(bot.Keywords), s.keywordsLimitPerBot, keywords, help))
 	if err != nil {
 		return fmt.Errorf("s.reply: %w", err)
 	}
@@ -775,7 +775,7 @@ func ruToBool(s string) (bool, bool) {
 
 func (s *service) parseKeywordsAndMode(in string) ([]Keyword, mode, bool) {
 	words := strings.Split(in, delim)
-	if len(words)-1%3 != 0 || len(words) < 4 {
+	if (len(words)-1)%3 != 0 || len(words) < 4 {
 		return nil, 0, false
 	}
 
@@ -832,7 +832,7 @@ func (s *service) parseKeywordsAndMode(in string) ([]Keyword, mode, bool) {
 			Ban: ban,
 		})
 	}
-	if len(keywords) > int(s.keywordsLimit) {
+	if len(keywords) > int(s.keywordsLimitPerBot) {
 		return nil, 0, false
 	}
 
