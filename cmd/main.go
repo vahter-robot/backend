@@ -75,6 +75,7 @@ func main() {
 		cfg.ParentBot.Token,
 		parentStateRepo,
 		userRepo,
+		peerRepo,
 		childBotRepo,
 		cfg.ChildBot.Path,
 		cfg.ChildBot.TokenPathPrefix,

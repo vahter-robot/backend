@@ -7,6 +7,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/vahter-robot/backend/pkg/child_bot"
 	"github.com/vahter-robot/backend/pkg/parent_state"
+	"github.com/vahter-robot/backend/pkg/peer"
 	"github.com/vahter-robot/backend/pkg/user"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	tb "gopkg.in/tucnak/telebot.v2"
@@ -20,6 +21,7 @@ type service struct {
 	httpHost              string
 	parentStateRepo       *parent_state.Repo
 	userRepo              *user.Repo
+	peerRepo              *peer.Repo
 	childBotRepo          *child_bot.Repo
 	childBotPath          string
 	childTokenPathPrefix  string
@@ -44,6 +46,7 @@ func NewService(
 	parentBotToken string,
 	parentStateRepo *parent_state.Repo,
 	userRepo *user.Repo,
+	peerRepo *peer.Repo,
 	childBotRepo *child_bot.Repo,
 	childBotPath,
 	childTokenPathPrefix string,
@@ -73,6 +76,7 @@ func NewService(
 		httpHost:              httpHost,
 		parentStateRepo:       parentStateRepo,
 		userRepo:              userRepo,
+		peerRepo:              peerRepo,
 		childBotRepo:          childBotRepo,
 		childBotPath:          childBotPath,
 		childTokenPathPrefix:  childTokenPathPrefix,
@@ -235,6 +239,11 @@ func (b *service) deleteChildBot(ctx context.Context, userID, childBotID primiti
 	err := b.childBotRepo.Delete(ctx, userID, childBotID)
 	if err != nil {
 		return fmt.Errorf("b.childBotRepo.Delete: %w", err)
+	}
+
+	err = b.peerRepo.DeleteByChildBotID(ctx, childBotID)
+	if err != nil {
+		return fmt.Errorf("b.peerRepo.DeleteByChildBotID: %w", err)
 	}
 	return nil
 }

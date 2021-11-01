@@ -37,7 +37,7 @@ func NewRepo(ctx context.Context, db *mongo.Database) (*Repo, error) {
 }
 
 func (r *Repo) createIndex(ctx context.Context) error {
-	_, err := r.coll.Indexes().CreateOne(ctx, mongo.IndexModel{
+	_, err := r.coll.Indexes().CreateMany(ctx, []mongo.IndexModel{{
 		Keys: bson.D{{
 			Key:   "tui",
 			Value: 1,
@@ -46,7 +46,11 @@ func (r *Repo) createIndex(ctx context.Context) error {
 			Value: 1,
 		}},
 		Options: options.Index().SetUnique(true),
-	})
+	}, {
+		Keys: bson.M{
+			"cbi": 1,
+		},
+	}})
 	if err != nil {
 		return fmt.Errorf("r.coll.Indexes().CreateOne: %w", err)
 	}
@@ -88,6 +92,20 @@ func (r *Repo) CreateMuted(c context.Context, childBotID primitive.ObjectID, tgU
 	}, options.Update().SetUpsert(true))
 	if err != nil {
 		return fmt.Errorf("r.coll.UpdateOne: %w", err)
+	}
+
+	return nil
+}
+
+func (r *Repo) DeleteByChildBotID(c context.Context, childBotID primitive.ObjectID) error {
+	ctx, cancel := context.WithTimeout(c, 10*time.Second)
+	defer cancel()
+
+	_, err := r.coll.DeleteMany(ctx, bson.M{
+		"cbi": childBotID,
+	})
+	if err != nil {
+		return fmt.Errorf("r.coll.DeleteMany: %w", err)
 	}
 
 	return nil

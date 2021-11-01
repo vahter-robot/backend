@@ -124,7 +124,7 @@ func (s *service) Serve(ctx context.Context, setWebhooks bool) error {
 	}
 
 	mux := http.NewServeMux()
-	tokenPrefixPath := fmt.Sprintf("/%s/", s.childTokenPathPrefix)
+	tokenPrefixPath := fmt.Sprintf("%s%s/", s.childBotPath, s.childTokenPathPrefix)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		_, err := w.Write(nil)
 		if err != nil {
