@@ -62,10 +62,6 @@ func (r *Repo) createIndex(ctx context.Context) error {
 			"t": 1,
 		},
 		Options: options.Index().SetUnique(true),
-	}, {
-		Keys: bson.M{
-			"wa": 1,
-		},
 	}})
 	if err != nil {
 		return fmt.Errorf("r.coll.Indexes().CreateOne: %w", err)
@@ -145,7 +141,7 @@ type Item struct {
 	Err error
 }
 
-func (r *Repo) GetOldWebhooks(c context.Context, olderThan time.Duration) chan Item {
+func (r *Repo) Get(c context.Context) chan Item {
 	res := make(chan Item)
 
 	go func() {
@@ -153,17 +149,16 @@ func (r *Repo) GetOldWebhooks(c context.Context, olderThan time.Duration) chan I
 		defer cancel()
 		defer close(res)
 
-		cur, err := r.coll.Find(ctx, bson.M{
-			"wa": bson.M{
-				"$lte": time.Now().UTC().Add(-olderThan),
-			},
-		})
+		cur, err := r.coll.Find(ctx, bson.M{})
 		if err != nil {
 			res <- Item{
 				Err: fmt.Errorf("r.coll.Find: %w", err),
 			}
 			return
 		}
+		defer func() {
+			_ = cur.Close(ctx)
+		}()
 
 		for cur.Next(ctx) {
 			var doc Bot

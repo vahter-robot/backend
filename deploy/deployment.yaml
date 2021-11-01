@@ -101,6 +101,11 @@ spec:
                 configMapKeyRef:
                   key: out-limit-chars
                   name: child-bot
+            - name: SETWEBHOOKSONSTART
+              valueFrom:
+                configMapKeyRef:
+                  key: set-webhooks-on-start
+                  name: backend
             - name: LOGLEVEL
               valueFrom:
                 configMapKeyRef:

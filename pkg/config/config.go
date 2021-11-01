@@ -6,12 +6,13 @@ import (
 )
 
 type Config struct {
-	Service   string
-	HTTP      http
-	MongoDB   mongodb
-	ParentBot parentBot
-	ChildBot  childBot
-	LogLevel  string
+	Service            string
+	HTTP               http
+	MongoDB            mongodb
+	ParentBot          parentBot
+	ChildBot           childBot
+	SetWebhooksOnStart bool
+	LogLevel           string
 }
 
 type http struct {

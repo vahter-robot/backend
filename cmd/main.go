@@ -108,7 +108,7 @@ func main() {
 		return nil
 	})
 	eg.Go(func() error {
-		e := childBotService.Serve(egc)
+		e := childBotService.Serve(egc, cfg.SetWebhooksOnStart)
 		if e != nil {
 			return fmt.Errorf("childBotService.Serve: %w", e)
 		}

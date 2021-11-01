@@ -112,8 +112,8 @@ func (b *service) handleCreateBot(msg *tb.Message) {
 
 	b.reply(msg, fmt.Sprintf(
 		"%s, давайте создадим вашего Вахтёр-бота. Перейдите в @BotFather, создайте бота (команда "+
-			"`newbot`) и отправьте в чат токен бота. Токен выглядит примерно так: "+
-			"`123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11`",
+			"'newbot') и отправьте в чат токен бота. Токен выглядит примерно так: "+
+			"'123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11'",
 		msg.Sender.FirstName,
 	))
 }
@@ -138,13 +138,13 @@ func (b *service) handleHelp(msg *tb.Message) {
 		return
 	}
 
-	b.reply(msg, fmt.Sprintf(`*Команды*
+	b.reply(msg, fmt.Sprintf(`Команды
 
 %s — создать нового бота
-%s — вывести список ботов и удалить выбранные
+%s — вывести список ботов и удалить выбранного
 %s — выйти из любого меню и показать это сообщение
 
-Для настройки конкретного бота, используйте чат с ним.`, createBot, deleteBot, help))
+Для настройки конкретного бота, используйте чат с ним`, createBot, deleteBot, help))
 }
 
 func (b *service) handleDeleteBot(msg *tb.Message) {
@@ -190,8 +190,8 @@ func (b *service) handleDeleteBot(msg *tb.Message) {
 
 		text += fmt.Sprintf(`
 
-ID       /%s
-Username @%s`, b2.ID.Hex(), api.Self.UserName)
+ID /%s
+@%s`, b2.ID.Hex(), api.Self.UserName)
 	}
 
 	b.replyOK(msg, text)

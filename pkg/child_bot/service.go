@@ -90,36 +90,38 @@ const (
 	comma = ","
 )
 
-func (s *service) Serve(ctx context.Context) error {
-	go func() {
-		wh := s.childBotRepo.GetOldWebhooks(ctx, 3*time.Hour)
-		for item := range wh {
-			if item.Err != nil {
-				s.logger.Error().Err(item.Err).Send()
-				return
-			}
+func (s *service) Serve(ctx context.Context, setWebhooks bool) error {
+	if setWebhooks {
+		go func() {
+			wh := s.childBotRepo.Get(ctx)
+			for item := range wh {
+				if item.Err != nil {
+					s.logger.Error().Err(item.Err).Send()
+					return
+				}
 
-			api, err := tgbotapi.NewBotAPI(item.Doc.Token)
-			if err != nil {
-				s.logger.Warn().Err(err).Send()
-				continue
-			}
+				api, err := tgbotapi.NewBotAPI(item.Doc.Token)
+				if err != nil {
+					s.logger.Warn().Err(err).Send()
+					continue
+				}
 
-			_, err = api.SetWebhook(tgbotapi.NewWebhook(fmt.Sprintf(
-				"%s/%s/%s/%s", s.httpHost, s.childBotPath, s.childTokenPathPrefix, item.Doc.Token,
-			)))
-			if err != nil {
-				s.logger.Warn().Err(err).Send()
-				continue
-			}
+				_, err = api.SetWebhook(tgbotapi.NewWebhook(fmt.Sprintf(
+					"%s/%s/%s/%s", s.httpHost, s.childBotPath, s.childTokenPathPrefix, item.Doc.Token,
+				)))
+				if err != nil {
+					s.logger.Warn().Err(err).Send()
+					continue
+				}
 
-			err = s.childBotRepo.SetWebhookNow(ctx, item.Doc.ID)
-			if err != nil {
-				s.logger.Error().Err(err).Send()
-				continue
+				err = s.childBotRepo.SetWebhookNow(ctx, item.Doc.ID)
+				if err != nil {
+					s.logger.Error().Err(err).Send()
+					continue
+				}
 			}
-		}
-	}()
+		}()
+	}
 
 	mux := http.NewServeMux()
 	tokenPrefixPath := fmt.Sprintf("/%s/", s.childTokenPathPrefix)
