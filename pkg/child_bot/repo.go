@@ -146,12 +146,11 @@ type Item struct {
 }
 
 func (r *Repo) GetOldWebhooks(c context.Context, olderThan time.Duration) chan Item {
-	ctx, cancel := context.WithCancel(c)
-	defer cancel()
-
 	res := make(chan Item)
 
 	go func() {
+		ctx, cancel := context.WithCancel(c)
+		defer cancel()
 		defer close(res)
 
 		cur, err := r.coll.Find(ctx, bson.M{
