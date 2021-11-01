@@ -58,11 +58,13 @@ func (r *Repo) createIndex(ctx context.Context) error {
 	return nil
 }
 
-func (r *Repo) Create(c context.Context, childBotID primitive.ObjectID, tgUserID, tgChatID int64) error {
+func (r *Repo) Create(c context.Context, childBotID primitive.ObjectID, tgUserID, tgChatID int64) (Peer, error) {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()
 
-	_, err := r.coll.UpdateOne(ctx, bson.M{
+	z := Peer{}
+
+	ur, err := r.coll.UpdateOne(ctx, bson.M{
 		"cbi": childBotID,
 		"tui": tgUserID,
 	}, bson.M{
@@ -71,10 +73,30 @@ func (r *Repo) Create(c context.Context, childBotID primitive.ObjectID, tgUserID
 		},
 	}, options.Update().SetUpsert(true))
 	if err != nil {
-		return fmt.Errorf("r.coll.UpdateOne: %w", err)
+		return z, fmt.Errorf("r.coll.UpdateOne: %w", err)
 	}
 
-	return nil
+	id, ok := ur.UpsertedID.(primitive.ObjectID)
+	if ok {
+		return Peer{
+			ID:         id,
+			ChildBotID: childBotID,
+			TgUserID:   tgUserID,
+			TgChatID:   tgChatID,
+			Muted:      false,
+		}, nil
+	}
+
+	var p Peer
+	err = r.coll.FindOne(ctx, bson.M{
+		"cbi": childBotID,
+		"tui": tgUserID,
+	}).Decode(&p)
+	if err != nil {
+		return z, fmt.Errorf("r.coll.FindOne: %w", err)
+	}
+
+	return p, nil
 }
 
 func (r *Repo) CreateMuted(c context.Context, childBotID primitive.ObjectID, tgUserID, tgChatID int64) error {
@@ -111,24 +133,24 @@ func (r *Repo) DeleteByChildBotID(c context.Context, childBotID primitive.Object
 	return nil
 }
 
-func (r *Repo) IsMuted(c context.Context, childBotID primitive.ObjectID, tgUserID int64) (bool, error) {
+func (r *Repo) Get(c context.Context, childBotID primitive.ObjectID, tgUserID int64) (Peer, bool, error) {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()
+
+	z := Peer{}
 
 	var p Peer
 	err := r.coll.FindOne(ctx, bson.M{
 		"cbi": childBotID,
 		"tui": tgUserID,
-	}, options.FindOne().SetProjection(bson.M{
-		"m": 1,
-	})).Decode(&p)
+	}).Decode(&p)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
-			return false, nil
+			return z, false, nil
 		}
 
-		return false, fmt.Errorf("r.coll.FindOne: %w", err)
+		return z, false, fmt.Errorf("r.coll.FindOne: %w", err)
 	}
 
-	return p.Muted, nil
+	return p, true, nil
 }

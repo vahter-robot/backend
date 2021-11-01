@@ -606,19 +606,14 @@ func (s *service) handleOwnerGetStart(
 }
 
 func (s *service) handlePeer(ctx context.Context, api *tgbotapi.BotAPI, upd update, bot Bot) error {
-	// (1) user: /start
-	// (2) bot : start reaction
-	// (3) user: first real message
-	if bot.Mode == OnlyFirst && upd.Message.MessageID > 3 {
-		return nil
-	}
-
-	muted, err := s.peerRepo.IsMuted(ctx, bot.ID, upd.Message.From.ID)
-	if err != nil {
-		return fmt.Errorf("s.peerRepo.IsMuted: %w", err)
-	}
-	if muted {
-		return nil
+	if bot.Mode == OnlyFirst {
+		_, found, err := s.peerRepo.Get(ctx, bot.ID, upd.Message.From.ID)
+		if err != nil {
+			return fmt.Errorf("s.peerRepo.Get: %w", err)
+		}
+		if found {
+			return nil
+		}
 	}
 
 	text := upd.Message.Text
@@ -627,6 +622,14 @@ func (s *service) handlePeer(ctx context.Context, api *tgbotapi.BotAPI, upd upda
 		if e != nil {
 			return fmt.Errorf("s.reply: %w", e)
 		}
+		return nil
+	}
+
+	inPeer, err := s.peerRepo.Create(ctx, bot.ID, upd.Message.From.ID, upd.Message.Chat.ID)
+	if err != nil {
+		return fmt.Errorf("s.peerRepo.Create: %w", err)
+	}
+	if inPeer.Muted {
 		return nil
 	}
 
@@ -648,12 +651,7 @@ kws:
 					return nil
 				}
 
-				e := s.peerRepo.Create(ctx, bot.ID, upd.Message.From.ID, upd.Message.Chat.ID)
-				if e != nil {
-					return fmt.Errorf("s.peerRepo.Create: %w", e)
-				}
-
-				e = s.reply(api, upd, kw.Out)
+				e := s.reply(api, upd, kw.Out)
 				if e != nil {
 					return fmt.Errorf("s.reply: %w", e)
 				}
@@ -694,12 +692,7 @@ kws:
 	}
 
 	if !match {
-		e := s.peerRepo.Create(ctx, bot.ID, upd.Message.From.ID, upd.Message.Chat.ID)
-		if e != nil {
-			return fmt.Errorf("s.peerRepo.Create: %w", e)
-		}
-
-		_, e = api.Send(tgbotapi.MessageConfig{
+		_, e := api.Send(tgbotapi.MessageConfig{
 			BaseChat: tgbotapi.BaseChat{
 				ChatID: bot.OwnerUserChatID,
 			},
@@ -712,7 +705,7 @@ kws:
 
 Бот не ответил
 
-Вы можете 'Ответить' на это сообщение текстом, чтобы ответить отправителю, или 'Ответить' %s чтобы забанить его`,
+Вы можете 'Ответить' на это сообщение текстом, чтобы ответить отправителю, или 'Ответить' '%s' чтобы забанить его`,
 				userForward, upd.Message.From.ID,
 				chatForward, upd.Message.Chat.ID,
 				messageForward, upd.Message.MessageID,
