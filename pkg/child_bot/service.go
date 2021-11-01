@@ -334,6 +334,7 @@ func (s *service) handleOwner(ctx context.Context, api *tgbotapi.BotAPI, upd upd
 			if e != nil {
 				return fmt.Errorf("s.replyOK: %w", e)
 			}
+			return nil
 		}
 	}
 
@@ -605,14 +606,18 @@ func (s *service) handleOwnerGetStart(
 }
 
 func (s *service) handlePeer(ctx context.Context, api *tgbotapi.BotAPI, upd update, bot Bot) error {
-	if bot.Mode == OnlyFirst {
-		_, found, err := s.peerRepo.Get(ctx, bot.ID, upd.Message.From.ID)
-		if err != nil {
-			return fmt.Errorf("s.peerRepo.Get: %w", err)
+	peerUser, peerFound, err := s.peerRepo.Get(ctx, bot.ID, upd.Message.From.ID)
+	if err != nil {
+		return fmt.Errorf("s.peerRepo.Create: %w", err)
+	}
+	if !peerFound {
+		e := s.peerRepo.Create(ctx, bot.ID, upd.Message.From.ID, upd.Message.Chat.ID)
+		if e != nil {
+			return fmt.Errorf("s.peerRepo.Create: %w", e)
 		}
-		if found {
-			return nil
-		}
+	}
+	if peerUser.Muted {
+		return nil
 	}
 
 	text := upd.Message.Text
@@ -624,11 +629,29 @@ func (s *service) handlePeer(ctx context.Context, api *tgbotapi.BotAPI, upd upda
 		return nil
 	}
 
-	inPeer, err := s.peerRepo.Create(ctx, bot.ID, upd.Message.From.ID, upd.Message.Chat.ID)
-	if err != nil {
-		return fmt.Errorf("s.peerRepo.Create: %w", err)
-	}
-	if inPeer.Muted {
+	if bot.Mode == OnlyFirst && peerFound {
+		_, e := api.Send(tgbotapi.MessageConfig{
+			BaseChat: tgbotapi.BaseChat{
+				ChatID: bot.OwnerUserChatID,
+			},
+			Text: fmt.Sprintf(`%s%d
+%s%d
+%s%d
+
+%s / %s:
+%s
+
+Вы можете 'Ответить' на это сообщение текстом, чтобы ответить отправителю, или '%s' чтобы забанить его`,
+				userForward, upd.Message.From.ID,
+				chatForward, upd.Message.Chat.ID,
+				messageForward, upd.Message.MessageID,
+				tplUsername(upd.Message.From.Username), tplName(upd.Message.From.FirstName),
+				text,
+				mute),
+		})
+		if e != nil {
+			return fmt.Errorf("api.Send: %w", e)
+		}
 		return nil
 	}
 
@@ -664,17 +687,17 @@ kws:
 %s%d
 %s%d
 
-%s / %s
+%s / %s:
 %s
 
-Бот ответил
+Бот ответил:
 %s
 
 Вы можете 'Ответить' на это сообщение текстом, чтобы ответить отправителю, или 'Ответить' '%s' чтобы забанить его`,
 							userForward, upd.Message.From.ID,
 							chatForward, upd.Message.Chat.ID,
 							messageForward, upd.Message.MessageID,
-							tplName(upd.Message.From.FirstName), tplUsername(upd.Message.From.Username),
+							tplUsername(upd.Message.From.Username), tplName(upd.Message.From.FirstName),
 							text,
 							kw.Out,
 							mute),
@@ -699,16 +722,14 @@ kws:
 %s%d
 %s%d
 
-%s / %s
+%s / %s:
 %s
-
-Бот не ответил
 
 Вы можете 'Ответить' на это сообщение текстом, чтобы ответить отправителю, или 'Ответить' '%s' чтобы забанить его`,
 				userForward, upd.Message.From.ID,
 				chatForward, upd.Message.Chat.ID,
 				messageForward, upd.Message.MessageID,
-				tplName(upd.Message.From.FirstName), tplUsername(upd.Message.From.Username),
+				tplUsername(upd.Message.From.Username), tplName(upd.Message.From.FirstName),
 				text,
 				mute),
 		})

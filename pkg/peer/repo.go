@@ -58,13 +58,11 @@ func (r *Repo) createIndex(ctx context.Context) error {
 	return nil
 }
 
-func (r *Repo) Create(c context.Context, childBotID primitive.ObjectID, tgUserID, tgChatID int64) (Peer, error) {
+func (r *Repo) Create(c context.Context, childBotID primitive.ObjectID, tgUserID, tgChatID int64) error {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()
 
-	z := Peer{}
-
-	ur, err := r.coll.UpdateOne(ctx, bson.M{
+	_, err := r.coll.UpdateOne(ctx, bson.M{
 		"cbi": childBotID,
 		"tui": tgUserID,
 	}, bson.M{
@@ -73,30 +71,10 @@ func (r *Repo) Create(c context.Context, childBotID primitive.ObjectID, tgUserID
 		},
 	}, options.Update().SetUpsert(true))
 	if err != nil {
-		return z, fmt.Errorf("r.coll.UpdateOne: %w", err)
+		return fmt.Errorf("r.coll.UpdateOne: %w", err)
 	}
 
-	id, ok := ur.UpsertedID.(primitive.ObjectID)
-	if ok {
-		return Peer{
-			ID:         id,
-			ChildBotID: childBotID,
-			TgUserID:   tgUserID,
-			TgChatID:   tgChatID,
-			Muted:      false,
-		}, nil
-	}
-
-	var p Peer
-	err = r.coll.FindOne(ctx, bson.M{
-		"cbi": childBotID,
-		"tui": tgUserID,
-	}).Decode(&p)
-	if err != nil {
-		return z, fmt.Errorf("r.coll.FindOne: %w", err)
-	}
-
-	return p, nil
+	return nil
 }
 
 func (r *Repo) CreateMuted(c context.Context, childBotID primitive.ObjectID, tgUserID, tgChatID int64) error {
