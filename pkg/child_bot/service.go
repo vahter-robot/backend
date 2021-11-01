@@ -9,7 +9,9 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/vahter-robot/backend/pkg/child_state"
 	"github.com/vahter-robot/backend/pkg/peer"
+	"github.com/vahter-robot/backend/pkg/reply"
 	"github.com/vahter-robot/backend/pkg/user"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"golang.org/x/sync/errgroup"
 	"io"
 	"net"
@@ -28,6 +30,7 @@ type service struct {
 	userRepo             *user.Repo
 	peerRepo             *peer.Repo
 	childBotRepo         *Repo
+	replyRepo            *reply.Repo
 	keywordsLimitPerBot  uint16
 	inLimitPerKeyword    uint16
 	inLimitChars         uint16
@@ -45,6 +48,7 @@ func NewService(
 	userRepo *user.Repo,
 	peerRepo *peer.Repo,
 	childBotRepo *Repo,
+	replyRepo *reply.Repo,
 	keywordsLimitPerBot,
 	inLimitPerKeyword,
 	inLimitChars,
@@ -59,6 +63,7 @@ func NewService(
 		userRepo:             userRepo,
 		peerRepo:             peerRepo,
 		childBotRepo:         childBotRepo,
+		replyRepo:            replyRepo,
 		keywordsLimitPerBot:  keywordsLimitPerBot,
 		inLimitPerKeyword:    inLimitPerKeyword,
 		inLimitChars:         inLimitChars,
@@ -76,8 +81,6 @@ const (
 	getKeywords = "/get_keywords"
 	setKeywords = "/set_keywords"
 
-	userForward    = "👤 "
-	chatForward    = "💬 "
 	messageForward = "✉️ "
 	mute           = "mute"
 
@@ -282,23 +285,21 @@ func (s *service) handleOwner(ctx context.Context, api *tgbotapi.BotAPI, upd upd
 
 	text := upd.Message.Text
 	replyText := upd.Message.ReplyToMessage.Text
-	if strings.HasPrefix(replyText, userForward) && upd.Message.ReplyToMessage.From.Username == api.Self.UserName {
-		rows := strings.Split(replyText, "\n")
-		if len(rows) >= 3 {
-			uID, e := strconv.Atoi(strings.TrimPrefix(rows[0], userForward))
-			if e != nil {
-				return fmt.Errorf("strconv.Atoi: %w", e)
+	if strings.HasPrefix(replyText, messageForward) && upd.Message.ReplyToMessage.From.Username == api.Self.UserName {
+		t := strings.Split(replyText, "\n")
+		if len(t) >= 1 {
+			id, er := primitive.ObjectIDFromHex(strings.TrimPrefix(t[0], messageForward))
+			if er != nil {
+				return fmt.Errorf("primitive.ObjectIDFromHex: %w", er)
 			}
-			userID := int64(uID)
 
-			cID, e := strconv.Atoi(strings.TrimPrefix(rows[1], chatForward))
-			if e != nil {
-				return fmt.Errorf("strconv.Atoi: %w", e)
+			repl, er := s.replyRepo.GetByID(ctx, id)
+			if er != nil {
+				return fmt.Errorf("s.replyRepo.GetByID: %w", er)
 			}
-			chatID := int64(cID)
 
 			if text == mute {
-				e = s.peerRepo.CreateMuted(ctx, bot.ID, userID, chatID)
+				e := s.peerRepo.CreateMuted(ctx, bot.ID, repl.TgUserID, repl.TgChatID)
 				if e != nil {
 					return fmt.Errorf("s.peerRepo.CreateMuted: %w", e)
 				}
@@ -310,29 +311,24 @@ func (s *service) handleOwner(ctx context.Context, api *tgbotapi.BotAPI, upd upd
 				return nil
 			}
 
-			messageID, e := strconv.Atoi(strings.TrimPrefix(rows[2], messageForward))
-			if e != nil {
-				return fmt.Errorf("strconv.Atoi: %w", e)
-			}
-
-			_, e = api.Send(tgbotapi.MessageConfig{
+			_, er = api.Send(tgbotapi.MessageConfig{
 				BaseChat: tgbotapi.BaseChat{
-					ChatID:           chatID,
-					ReplyToMessageID: messageID,
+					ChatID:           repl.TgChatID,
+					ReplyToMessageID: int(repl.TgMessageID),
 				},
 				Text: text,
 			})
-			if e != nil {
-				er := s.replyErr(api, upd, "Не отправлено. Возможно пользователь остановил бота")
-				if er != nil {
-					return fmt.Errorf("s.replyErr: %w", er)
+			if er != nil {
+				er2 := s.replyErr(api, upd, "Не отправлено. Возможно пользователь остановил бота")
+				if er2 != nil {
+					return fmt.Errorf("s.replyErr: %w", er2)
 				}
 				return nil
 			}
 
-			e = s.replyOK(api, upd, "Отправлено")
-			if e != nil {
-				return fmt.Errorf("s.replyOK: %w", e)
+			er = s.replyOK(api, upd, "Отправлено")
+			if er != nil {
+				return fmt.Errorf("s.replyOK: %w", er)
 			}
 			return nil
 		}
@@ -631,21 +627,21 @@ func (s *service) handlePeer(ctx context.Context, api *tgbotapi.BotAPI, upd upda
 	}
 
 	if bot.Mode == OnlyFirst && peerFound {
-		_, e := api.Send(tgbotapi.MessageConfig{
+		id, e := s.replyRepo.Create(ctx, upd.Message.From.ID, upd.Message.Chat.ID, upd.Message.MessageID)
+		if e != nil {
+			return fmt.Errorf("s.replyRepo.Create: %w", e)
+		}
+
+		_, e = api.Send(tgbotapi.MessageConfig{
 			BaseChat: tgbotapi.BaseChat{
 				ChatID: bot.OwnerUserChatID,
 			},
-			Text: fmt.Sprintf(`%s%d
-%s%d
-%s%d
-
+			Text: fmt.Sprintf(`%s%s
 %s / %s:
 %s
 
 Вы можете 'Ответить' на это сообщение текстом, чтобы ответить отправителю, или '%s' чтобы забанить его`,
-				userForward, upd.Message.From.ID,
-				chatForward, upd.Message.Chat.ID,
-				messageForward, upd.Message.MessageID,
+				messageForward, id,
 				tplUsername(upd.Message.From.Username), tplName(upd.Message.From.FirstName),
 				text,
 				mute),
@@ -680,14 +676,16 @@ kws:
 				}
 
 				if bot.OwnerUserChatID != 0 {
-					_, e = api.Send(tgbotapi.MessageConfig{
+					id, er := s.replyRepo.Create(ctx, upd.Message.From.ID, upd.Message.Chat.ID, upd.Message.MessageID)
+					if er != nil {
+						return fmt.Errorf("s.replyRepo.Create: %w", er)
+					}
+
+					_, er = api.Send(tgbotapi.MessageConfig{
 						BaseChat: tgbotapi.BaseChat{
 							ChatID: bot.OwnerUserChatID,
 						},
-						Text: fmt.Sprintf(`%s%d
-%s%d
-%s%d
-
+						Text: fmt.Sprintf(`%s%s
 %s / %s:
 %s
 
@@ -695,16 +693,14 @@ kws:
 %s
 
 Вы можете 'Ответить' на это сообщение текстом, чтобы ответить отправителю, или 'Ответить' '%s' чтобы забанить его`,
-							userForward, upd.Message.From.ID,
-							chatForward, upd.Message.Chat.ID,
-							messageForward, upd.Message.MessageID,
+							messageForward, id,
 							tplUsername(upd.Message.From.Username), tplName(upd.Message.From.FirstName),
 							text,
 							kw.Out,
 							mute),
 					})
-					if e != nil {
-						return fmt.Errorf("api.Send: %w", e)
+					if er != nil {
+						return fmt.Errorf("api.Send: %w", er)
 					}
 				}
 
@@ -715,21 +711,21 @@ kws:
 	}
 
 	if !match {
-		_, e := api.Send(tgbotapi.MessageConfig{
+		id, e := s.replyRepo.Create(ctx, upd.Message.From.ID, upd.Message.Chat.ID, upd.Message.MessageID)
+		if e != nil {
+			return fmt.Errorf("s.replyRepo.Create: %w", e)
+		}
+
+		_, e = api.Send(tgbotapi.MessageConfig{
 			BaseChat: tgbotapi.BaseChat{
 				ChatID: bot.OwnerUserChatID,
 			},
-			Text: fmt.Sprintf(`%s%d
-%s%d
-%s%d
-
+			Text: fmt.Sprintf(`%s%s
 %s / %s:
 %s
 
 Вы можете 'Ответить' на это сообщение текстом, чтобы ответить отправителю, или 'Ответить' '%s' чтобы забанить его`,
-				userForward, upd.Message.From.ID,
-				chatForward, upd.Message.Chat.ID,
-				messageForward, upd.Message.MessageID,
+				messageForward, id,
 				tplUsername(upd.Message.From.Username), tplName(upd.Message.From.FirstName),
 				text,
 				mute),

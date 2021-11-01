@@ -14,6 +14,7 @@ import (
 	"github.com/vahter-robot/backend/pkg/parent_bot"
 	"github.com/vahter-robot/backend/pkg/parent_state"
 	"github.com/vahter-robot/backend/pkg/peer"
+	"github.com/vahter-robot/backend/pkg/reply"
 	"github.com/vahter-robot/backend/pkg/user"
 	"golang.org/x/sync/errgroup"
 )
@@ -66,6 +67,11 @@ func main() {
 		panic(err)
 	}
 
+	replyRepo, err := reply.NewRepo(ctx, db)
+	if err != nil {
+		panic(err)
+	}
+
 	parentBotService, err := parent_bot.NewService(
 		logg,
 		cfg.ParentBot.Host,
@@ -93,6 +99,7 @@ func main() {
 		userRepo,
 		peerRepo,
 		childBotRepo,
+		replyRepo,
 		cfg.ChildBot.KeywordsLimitPerBot,
 		cfg.ChildBot.InLimitPerKeyword,
 		cfg.ChildBot.InLimitChars,
