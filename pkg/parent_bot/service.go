@@ -52,7 +52,7 @@ func NewService(
 	*service,
 	error,
 ) {
-	publicURL := fmt.Sprintf("%s/%s/%s/%s", httpHost, parentBotPath, parentTokenPathPrefix, parentBotToken)
+	publicURL := fmt.Sprintf("%s%s/%s/%s", httpHost, parentBotPath, parentTokenPathPrefix, parentBotToken)
 	poller := &tb.Webhook{
 		Listen: net.JoinHostPort("0.0.0.0", parentHTTPPort),
 		Endpoint: &tb.WebhookEndpoint{
@@ -294,7 +294,7 @@ func (b *service) handleOnText(msg *tb.Message) {
 		}
 
 		_, e = api.SetWebhook(tgbotapi.NewWebhook(fmt.Sprintf(
-			"%s/%s/%s/%s", b.httpHost, b.childBotPath, b.childTokenPathPrefix, token,
+			"%s%s/%s/%s", b.httpHost, b.childBotPath, b.childTokenPathPrefix, token,
 		)))
 		if e != nil {
 			b.replyFatalErr(msg, e)
