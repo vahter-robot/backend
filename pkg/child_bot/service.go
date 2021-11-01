@@ -560,7 +560,6 @@ func (s *service) handleOwnerGetKeywords(
 	var keywords string
 	for _, word := range bot.Keywords {
 		keywords += fmt.Sprintf(`
-
 %s
 ===
 %s
@@ -569,14 +568,19 @@ func (s *service) handleOwnerGetKeywords(
 	}
 
 	err := s.reply(api, upd, fmt.Sprintf(`Ключевые слова (%d/%d). Формат:
+Режим работы. '1' — реагирует только на первое сообщение. '2' — реагирует на все
+===
 Ключевое слово
 ===
 Автоответ
 ===
 Банить
+
+%d
+===
 %s
 
-%s`, len(bot.Keywords), s.keywordsLimitPerBot, keywords, help))
+%s`, bot.Mode, len(bot.Keywords), s.keywordsLimitPerBot, keywords, help))
 	if err != nil {
 		return fmt.Errorf("s.reply: %w", err)
 	}
