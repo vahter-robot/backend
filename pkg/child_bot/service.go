@@ -610,12 +610,6 @@ func (s *service) handlePeer(ctx context.Context, api *tgbotapi.BotAPI, upd upda
 	if err != nil {
 		return fmt.Errorf("s.peerRepo.Create: %w", err)
 	}
-	if !peerFound {
-		e := s.peerRepo.Create(ctx, bot.ID, upd.Message.From.ID, upd.Message.Chat.ID)
-		if e != nil {
-			return fmt.Errorf("s.peerRepo.Create: %w", e)
-		}
-	}
 	if peerUser.Muted {
 		return nil
 	}
@@ -627,6 +621,13 @@ func (s *service) handlePeer(ctx context.Context, api *tgbotapi.BotAPI, upd upda
 			return fmt.Errorf("s.reply: %w", e)
 		}
 		return nil
+	}
+
+	if !peerFound {
+		e := s.peerRepo.Create(ctx, bot.ID, upd.Message.From.ID, upd.Message.Chat.ID)
+		if e != nil {
+			return fmt.Errorf("s.peerRepo.Create: %w", e)
+		}
 	}
 
 	if bot.Mode == OnlyFirst && peerFound {
