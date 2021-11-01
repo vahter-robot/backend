@@ -577,10 +577,9 @@ func (s *service) handleOwnerGetKeywords(
 Банить
 
 %d
-===
-%s
+===%s
 
-%s`, bot.Mode, len(bot.Keywords), s.keywordsLimitPerBot, keywords, help))
+%s`, len(bot.Keywords), bot.Mode, s.keywordsLimitPerBot, keywords, help))
 	if err != nil {
 		return fmt.Errorf("s.reply: %w", err)
 	}
