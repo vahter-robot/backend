@@ -9,19 +9,19 @@ metadata:
 spec:
   tls:
     - hosts:
-        - vahter-robot.shopgrip.ru
-      secretName: vahter-robot-shopgrip-tls
+        - vahter-robot-parent-bot.shopgrip.ru
+        - vahter-robot-child-bot.shopgrip.ru
+      secretName: shopgrip-tls
   rules:
-    - host: vahter-robot.shopgrip.ru
+    - host: vahter-robot-parent-bot.shopgrip.ru
       http:
         paths:
-          - path: /parent-bot
-            pathType: Prefix
-            backend:
+          - backend:
               serviceName: parent-bot
               servicePort: 80
-          - path: /child-bot
-            pathType: Prefix
-            backend:
+    - host: vahter-robot-child-bot.shopgrip.ru
+      http:
+        paths:
+          - backend:
               serviceName: child-bot
               servicePort: 81

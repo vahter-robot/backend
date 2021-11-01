@@ -68,16 +68,15 @@ func main() {
 
 	parentBotService, err := parent_bot.NewService(
 		logg,
-		cfg.HTTP.Host,
+		cfg.ParentBot.Host,
 		cfg.ParentBot.Port,
-		cfg.ParentBot.Path,
 		cfg.ParentBot.TokenPathPrefix,
 		cfg.ParentBot.Token,
 		parentStateRepo,
 		userRepo,
 		peerRepo,
 		childBotRepo,
-		cfg.ChildBot.Path,
+		cfg.ChildBot.Host,
 		cfg.ChildBot.TokenPathPrefix,
 		cfg.ChildBot.BotsLimitPerUser,
 	)
@@ -87,9 +86,8 @@ func main() {
 
 	childBotService := child_bot.NewService(
 		logg,
-		cfg.HTTP.Host,
+		cfg.ChildBot.Host,
 		cfg.ChildBot.Port,
-		cfg.ChildBot.Path,
 		cfg.ChildBot.TokenPathPrefix,
 		childStateRepo,
 		userRepo,

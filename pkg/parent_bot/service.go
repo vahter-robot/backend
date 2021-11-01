@@ -18,12 +18,11 @@ import (
 
 type service struct {
 	bot                   *tb.Bot
-	httpHost              string
 	parentStateRepo       *parent_state.Repo
 	userRepo              *user.Repo
 	peerRepo              *peer.Repo
 	childBotRepo          *child_bot.Repo
-	childBotPath          string
+	childBotHost          string
 	childTokenPathPrefix  string
 	childBotsLimitPerUser uint16
 	logger                zerolog.Logger
@@ -39,25 +38,24 @@ const (
 
 func NewService(
 	logger zerolog.Logger,
-	httpHost,
-	parentHTTPPort,
-	parentBotPath,
+	parentBotHost,
+	parentBotPort,
 	parentTokenPathPrefix,
 	parentBotToken string,
 	parentStateRepo *parent_state.Repo,
 	userRepo *user.Repo,
 	peerRepo *peer.Repo,
 	childBotRepo *child_bot.Repo,
-	childBotPath,
+	childBotHost,
 	childTokenPathPrefix string,
 	childBotsLimitPerUser uint16,
 ) (
 	*service,
 	error,
 ) {
-	publicURL := fmt.Sprintf("%s%s/%s/%s", httpHost, parentBotPath, parentTokenPathPrefix, parentBotToken)
+	publicURL := fmt.Sprintf("%s/%s/%s", parentBotHost, parentTokenPathPrefix, parentBotToken)
 	poller := &tb.Webhook{
-		Listen: net.JoinHostPort("0.0.0.0", parentHTTPPort),
+		Listen: net.JoinHostPort("0.0.0.0", parentBotPort),
 		Endpoint: &tb.WebhookEndpoint{
 			PublicURL: publicURL,
 		},
@@ -73,12 +71,11 @@ func NewService(
 
 	return &service{
 		bot:                   b,
-		httpHost:              httpHost,
 		parentStateRepo:       parentStateRepo,
 		userRepo:              userRepo,
 		peerRepo:              peerRepo,
 		childBotRepo:          childBotRepo,
-		childBotPath:          childBotPath,
+		childBotHost:          childBotHost,
 		childTokenPathPrefix:  childTokenPathPrefix,
 		childBotsLimitPerUser: childBotsLimitPerUser,
 		logger:                logger.With().Str("package", "parent_bot").Logger(),
@@ -303,7 +300,7 @@ func (b *service) handleOnText(msg *tb.Message) {
 		}
 
 		_, e = api.SetWebhook(tgbotapi.NewWebhook(fmt.Sprintf(
-			"%s%s/%s/%s", b.httpHost, b.childBotPath, b.childTokenPathPrefix, token,
+			"%s/%s/%s", b.childBotHost, b.childTokenPathPrefix, token,
 		)))
 		if e != nil {
 			b.replyFatalErr(msg, e)

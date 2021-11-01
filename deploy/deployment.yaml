@@ -46,8 +46,6 @@ spec:
           env:
             - name: SERVICE
               value: backend
-            - name: HTTP_HOST
-              value: https://vahter-robot.shopgrip.ru
             - name: MONGODB_URL
               valueFrom:
                 configMapKeyRef:
@@ -58,19 +56,19 @@ spec:
                 secretKeyRef:
                   key: token
                   name: parent-bot
+            - name: PARENTBOT_HOST
+              value: https://vahter-robot-parent-bot.shopgrip.ru
             - name: PARENTBOT_PORT
               value: "80"
-            - name: PARENTBOT_PATH
-              value: /parent-bot
             - name: PARENTBOT_TOKENPATHPREFIX
               valueFrom:
                 configMapKeyRef:
                   key: token-path-prefix
                   name: parent-bot
+            - name: CHILDBOT_HOST
+              value: https://vahter-robot-child-bot.shopgrip.ru
             - name: CHILDBOT_PORT
               value: "81"
-            - name: CHILDBOT_PATH
-              value: /child-bot
             - name: CHILDBOT_TOKENPATHPREFIX
               valueFrom:
                 configMapKeyRef:

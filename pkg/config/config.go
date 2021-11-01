@@ -24,15 +24,15 @@ type mongodb struct {
 }
 
 type parentBot struct {
+	Host            string
 	Port            string
-	Path            string
 	Token           string
 	TokenPathPrefix string
 }
 
 type childBot struct {
+	Host                string
 	Port                string
-	Path                string
 	TokenPathPrefix     string
 	BotsLimitPerUser    uint16
 	KeywordsLimitPerBot uint16

@@ -21,9 +21,8 @@ import (
 )
 
 type service struct {
-	httpHost             string
-	childHTTPPort        string
-	childBotPath         string
+	childBotHost         string
+	childBotPort         string
 	childTokenPathPrefix string
 	childStateRepo       *child_state.Repo
 	userRepo             *user.Repo
@@ -39,9 +38,8 @@ type service struct {
 
 func NewService(
 	logger zerolog.Logger,
-	httpHost,
-	childHTTPPort,
-	childBotPath,
+	childBotHost,
+	childBotPort,
 	childTokenPathPrefix string,
 	childStateRepo *child_state.Repo,
 	userRepo *user.Repo,
@@ -54,9 +52,8 @@ func NewService(
 	parentBotUsername string,
 ) *service {
 	return &service{
-		httpHost:             httpHost,
-		childBotPath:         childBotPath,
-		childHTTPPort:        childHTTPPort,
+		childBotHost:         childBotHost,
+		childBotPort:         childBotPort,
 		childTokenPathPrefix: childTokenPathPrefix,
 		childStateRepo:       childStateRepo,
 		userRepo:             userRepo,
@@ -107,7 +104,7 @@ func (s *service) Serve(ctx context.Context, setWebhooks bool) error {
 				}
 
 				_, err = api.SetWebhook(tgbotapi.NewWebhook(fmt.Sprintf(
-					"%s/%s/%s/%s", s.httpHost, s.childBotPath, s.childTokenPathPrefix, item.Doc.Token,
+					"%s/%s/%s", s.childBotHost, s.childTokenPathPrefix, item.Doc.Token,
 				)))
 				if err != nil {
 					s.logger.Warn().Err(err).Send()
@@ -130,11 +127,12 @@ func (s *service) Serve(ctx context.Context, setWebhooks bool) error {
 			s.logger.Error().Err(err).Send()
 		}
 	})
-	mux.HandleFunc(fmt.Sprintf("/%s/", s.childTokenPathPrefix), func(w http.ResponseWriter, r *http.Request) {
+	prefix := fmt.Sprintf("/%s/", s.childTokenPathPrefix)
+	mux.HandleFunc(prefix, func(w http.ResponseWriter, r *http.Request) {
 		rc, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 		defer cancel()
 
-		token := strings.TrimPrefix(r.URL.Path, fmt.Sprintf("%s/%s", s.childBotPath, s.childTokenPathPrefix))
+		token := strings.TrimPrefix(r.URL.Path, prefix)
 
 		s.logger.Debug().Str("path", r.URL.Path).Str("token", token).Msg("got request")
 
@@ -153,7 +151,7 @@ func (s *service) Serve(ctx context.Context, setWebhooks bool) error {
 	})
 
 	srv := &http.Server{
-		Addr:    net.JoinHostPort("0.0.0.0", s.childHTTPPort),
+		Addr:    net.JoinHostPort("0.0.0.0", s.childBotPort),
 		Handler: mux,
 	}
 	go func() {
