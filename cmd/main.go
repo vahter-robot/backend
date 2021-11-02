@@ -105,6 +105,8 @@ func main() {
 		cfg.ChildBot.InLimitChars,
 		cfg.ChildBot.OutLimitChars,
 		parentBot.Self.UserName,
+		cfg.SetWebhooksOnStart,
+		cfg.ChildBot.TimeoutOnHandle,
 	)
 
 	go graceful.HandleSignals(cancel)
@@ -114,7 +116,7 @@ func main() {
 		return nil
 	})
 	eg.Go(func() error {
-		e := childBotService.Serve(egc, cfg.SetWebhooksOnStart)
+		e := childBotService.Serve(egc)
 		if e != nil {
 			return fmt.Errorf("childBotService.Serve: %w", e)
 		}

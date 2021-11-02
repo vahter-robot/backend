@@ -36,6 +36,8 @@ type service struct {
 	inLimitChars         uint16
 	outLimitChars        uint16
 	parentBotUsername    string
+	setWebhooks          bool
+	timeoutOnHandle      bool
 	logger               zerolog.Logger
 }
 
@@ -54,6 +56,8 @@ func NewService(
 	inLimitChars,
 	outLimitChars uint16,
 	parentBotUsername string,
+	setWebhooks,
+	timeoutOnHandle bool,
 ) *service {
 	return &service{
 		childBotHost:         childBotHost,
@@ -69,6 +73,8 @@ func NewService(
 		inLimitChars:         inLimitChars,
 		outLimitChars:        outLimitChars,
 		parentBotUsername:    parentBotUsername,
+		setWebhooks:          setWebhooks,
+		timeoutOnHandle:      timeoutOnHandle,
 		logger:               logger.With().Str("package", "child_bot").Logger(),
 	}
 }
@@ -90,8 +96,8 @@ const (
 	comma = ","
 )
 
-func (s *service) Serve(ctx context.Context, setWebhooks bool) error {
-	if setWebhooks {
+func (s *service) Serve(ctx context.Context) error {
+	if s.setWebhooks {
 		go func() {
 			wh := s.childBotRepo.Get(ctx)
 			for item := range wh {
@@ -132,8 +138,12 @@ func (s *service) Serve(ctx context.Context, setWebhooks bool) error {
 	})
 	pathPrefix := fmt.Sprintf("/%s/", s.childTokenPathPrefix)
 	mux.HandleFunc(pathPrefix, func(w http.ResponseWriter, r *http.Request) {
-		rc, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-		defer cancel()
+		rc := context.Background()
+		if s.timeoutOnHandle {
+			c, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+			defer cancel()
+			rc = c
+		}
 
 		token := strings.TrimPrefix(r.URL.Path, pathPrefix)
 
@@ -554,10 +564,9 @@ func (s *service) handleOwnerGetKeywords(
 	upd update,
 	bot Bot,
 ) error {
-	var keywords string
-	for _, word := range bot.Keywords {
-		keywords += fmt.Sprintf(`
-%s
+	keywords := make([]string, len(bot.Keywords))
+	for i, word := range bot.Keywords {
+		keywords[i] = fmt.Sprintf(`%s
 ===
 %s
 ===
@@ -574,9 +583,10 @@ func (s *service) handleOwnerGetKeywords(
 Банить
 
 %d
-===%s
+===
+%s
 
-%s`, len(bot.Keywords), s.keywordsLimitPerBot, bot.Mode, keywords, help))
+%s`, len(bot.Keywords), s.keywordsLimitPerBot, bot.Mode, strings.Join(keywords, delim), help))
 	if err != nil {
 		return fmt.Errorf("s.reply: %w", err)
 	}
@@ -602,6 +612,10 @@ func (s *service) handleOwnerGetStart(
 }
 
 func (s *service) handlePeer(ctx context.Context, api *tgbotapi.BotAPI, upd update, bot Bot) error {
+	if bot.Mode == None {
+		return nil
+	}
+
 	peerUser, peerFound, err := s.peerRepo.Get(ctx, bot.ID, upd.Message.From.ID)
 	if err != nil {
 		return fmt.Errorf("s.peerRepo.Create: %w", err)
@@ -640,8 +654,8 @@ func (s *service) handlePeer(ctx context.Context, api *tgbotapi.BotAPI, upd upda
 %s / %s:
 %s
 
-Вы можете 'Ответить' на это сообщение текстом, чтобы ответить отправителю, или '%s' чтобы забанить его`,
-				messageForward, id,
+'Ответить' на это сообщение текстом, чтобы ответить отправителю, или '%s' чтобы забанить его`,
+				messageForward, id.Hex(),
 				tplUsername(upd.Message.From.Username), tplName(upd.Message.From.FirstName),
 				text,
 				mute),
@@ -692,8 +706,8 @@ kws:
 Бот ответил:
 %s
 
-Вы можете 'Ответить' на это сообщение текстом, чтобы ответить отправителю, или 'Ответить' '%s' чтобы забанить его`,
-							messageForward, id,
+'Ответить' на это сообщение текстом, чтобы ответить отправителю, или '%s' чтобы забанить его`,
+							messageForward, id.Hex(),
 							tplUsername(upd.Message.From.Username), tplName(upd.Message.From.FirstName),
 							text,
 							kw.Out,
@@ -724,8 +738,8 @@ kws:
 %s / %s:
 %s
 
-Вы можете 'Ответить' на это сообщение текстом, чтобы ответить отправителю, или 'Ответить' '%s' чтобы забанить его`,
-				messageForward, id,
+'Ответить' на это сообщение текстом, чтобы ответить отправителю, или '%s' чтобы забанить его`,
+				messageForward, id.Hex(),
 				tplUsername(upd.Message.From.Username), tplName(upd.Message.From.FirstName),
 				text,
 				mute),

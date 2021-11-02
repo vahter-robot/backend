@@ -99,6 +99,11 @@ spec:
                 configMapKeyRef:
                   key: out-limit-chars
                   name: child-bot
+            - name: CHILDBOT_TIMEOUTONHANDLE
+              valueFrom:
+                configMapKeyRef:
+                  key: timeout-on-handle
+                  name: child-bot
             - name: SETWEBHOOKSONSTART
               valueFrom:
                 configMapKeyRef:

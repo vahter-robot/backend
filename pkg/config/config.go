@@ -34,6 +34,7 @@ type childBot struct {
 	InLimitPerKeyword   uint16
 	InLimitChars        uint16
 	OutLimitChars       uint16
+	TimeoutOnHandle     bool
 }
 
 func NewConfig() (Config, error) {

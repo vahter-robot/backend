@@ -36,7 +36,8 @@ type Repo struct {
 type mode uint8
 
 const (
-	OnlyFirst mode = iota + 1
+	None mode = iota
+	OnlyFirst
 	Always
 )
 
