@@ -82,6 +82,8 @@ func main() {
 		userRepo,
 		peerRepo,
 		childBotRepo,
+		replyRepo,
+		childStateRepo,
 		cfg.ChildBot.Host,
 		cfg.ChildBot.TokenPathPrefix,
 		cfg.ChildBot.BotsLimitPerUser,

@@ -98,10 +98,7 @@ func (r *Repo) CreateMuted(c context.Context, childBotID primitive.ObjectID, tgU
 }
 
 func (r *Repo) DeleteByChildBotID(c context.Context, childBotID primitive.ObjectID) error {
-	ctx, cancel := context.WithTimeout(c, 10*time.Second)
-	defer cancel()
-
-	_, err := r.coll.DeleteMany(ctx, bson.M{
+	_, err := r.coll.DeleteMany(c, bson.M{
 		"cbi": childBotID,
 	})
 	if err != nil {

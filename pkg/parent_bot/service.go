@@ -6,8 +6,10 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/rs/zerolog"
 	"github.com/vahter-robot/backend/pkg/child_bot"
+	"github.com/vahter-robot/backend/pkg/child_state"
 	"github.com/vahter-robot/backend/pkg/parent_state"
 	"github.com/vahter-robot/backend/pkg/peer"
+	"github.com/vahter-robot/backend/pkg/reply"
 	"github.com/vahter-robot/backend/pkg/user"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	tb "gopkg.in/tucnak/telebot.v2"
@@ -22,6 +24,8 @@ type service struct {
 	userRepo              *user.Repo
 	peerRepo              *peer.Repo
 	childBotRepo          *child_bot.Repo
+	replyRepo             *reply.Repo
+	childStateRepo        *child_state.Repo
 	childBotHost          string
 	childTokenPathPrefix  string
 	childBotsLimitPerUser uint16
@@ -46,6 +50,8 @@ func NewService(
 	userRepo *user.Repo,
 	peerRepo *peer.Repo,
 	childBotRepo *child_bot.Repo,
+	replyRepo *reply.Repo,
+	childStateRepo *child_state.Repo,
 	childBotHost,
 	childTokenPathPrefix string,
 	childBotsLimitPerUser uint16,
@@ -75,6 +81,8 @@ func NewService(
 		userRepo:              userRepo,
 		peerRepo:              peerRepo,
 		childBotRepo:          childBotRepo,
+		replyRepo:             replyRepo,
+		childStateRepo:        childStateRepo,
 		childBotHost:          childBotHost,
 		childTokenPathPrefix:  childTokenPathPrefix,
 		childBotsLimitPerUser: childBotsLimitPerUser,
@@ -238,10 +246,22 @@ func (b *service) deleteChildBot(ctx context.Context, userID, childBotID primiti
 		return fmt.Errorf("b.childBotRepo.Delete: %w", err)
 	}
 
-	err = b.peerRepo.DeleteByChildBotID(ctx, childBotID)
-	if err != nil {
-		return fmt.Errorf("b.peerRepo.DeleteByChildBotID: %w", err)
-	}
+	go func() {
+		bg := context.Background()
+		err = b.peerRepo.DeleteByChildBotID(bg, childBotID)
+		if err != nil {
+			b.logger.Error().Err(fmt.Errorf("b.peerRepo.DeleteByChildBotID: %w", err)).Send()
+		}
+		err = b.replyRepo.DeleteByChildBotID(bg, childBotID)
+		if err != nil {
+			b.logger.Error().Err(fmt.Errorf("b.replyRepo.DeleteByChildBotID: %w", err)).Send()
+		}
+		err = b.childStateRepo.Delete(bg, userID, childBotID)
+		if err != nil {
+			b.logger.Error().Err(fmt.Errorf("b.childStateRepo.Delete: %w", err)).Send()
+		}
+	}()
+
 	return nil
 }
 
@@ -295,7 +315,7 @@ func (b *service) handleOnText(msg *tb.Message) {
 
 		e = b.childBotRepo.Create(ctx, usr.ID, token)
 		if e != nil {
-			b.replyFatalErr(msg, e)
+			b.replyErr(msg, "Бот с таким токеном уже существует")
 			return
 		}
 

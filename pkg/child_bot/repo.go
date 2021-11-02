@@ -103,13 +103,13 @@ func (r *Repo) Create(c context.Context, userID primitive.ObjectID, token string
 	return nil
 }
 
-func (r *Repo) Delete(c context.Context, userID, botID primitive.ObjectID) error {
+func (r *Repo) Delete(c context.Context, userID, id primitive.ObjectID) error {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()
 
-	_, err := r.coll.DeleteOne(ctx, Bot{
-		ID:          botID,
-		OwnerUserID: userID,
+	_, err := r.coll.DeleteOne(ctx, bson.M{
+		"_id": id,
+		"ui":  userID,
 	})
 	if err != nil {
 		return fmt.Errorf("r.coll.DeleteOne: %w", err)

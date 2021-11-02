@@ -147,8 +147,6 @@ func (s *service) Serve(ctx context.Context) error {
 
 		token := strings.TrimPrefix(r.URL.Path, pathPrefix)
 
-		s.logger.Debug().Str("path", r.URL.Path).Str("token", token).Msg("got request")
-
 		whOK, err := s.handle(rc, token, r.Body)
 		if err != nil {
 			s.logger.Warn().Err(err).Send()
@@ -226,8 +224,6 @@ func (s *service) handle(ctx context.Context, token string, body io.ReadCloser) 
 	if err != nil {
 		return true, fmt.Errorf("io.ReadAll: %w", err)
 	}
-
-	s.logger.Debug().Str("body", string(b)).Send()
 
 	var upd update
 	err = json.Unmarshal(b, &upd)
@@ -641,7 +637,7 @@ func (s *service) handlePeer(ctx context.Context, api *tgbotapi.BotAPI, upd upda
 	}
 
 	if bot.Mode == OnlyFirst && peerFound {
-		id, e := s.replyRepo.Create(ctx, upd.Message.From.ID, upd.Message.Chat.ID, upd.Message.MessageID)
+		id, e := s.replyRepo.Create(ctx, bot.ID, upd.Message.From.ID, upd.Message.Chat.ID, upd.Message.MessageID)
 		if e != nil {
 			return fmt.Errorf("s.replyRepo.Create: %w", e)
 		}
@@ -690,7 +686,13 @@ kws:
 				}
 
 				if bot.OwnerUserChatID != 0 {
-					id, er := s.replyRepo.Create(ctx, upd.Message.From.ID, upd.Message.Chat.ID, upd.Message.MessageID)
+					id, er := s.replyRepo.Create(
+						ctx,
+						bot.ID,
+						upd.Message.From.ID,
+						upd.Message.Chat.ID,
+						upd.Message.MessageID,
+					)
 					if er != nil {
 						return fmt.Errorf("s.replyRepo.Create: %w", er)
 					}
@@ -725,7 +727,7 @@ kws:
 	}
 
 	if !match {
-		id, e := s.replyRepo.Create(ctx, upd.Message.From.ID, upd.Message.Chat.ID, upd.Message.MessageID)
+		id, e := s.replyRepo.Create(ctx, bot.ID, upd.Message.From.ID, upd.Message.Chat.ID, upd.Message.MessageID)
 		if e != nil {
 			return fmt.Errorf("s.replyRepo.Create: %w", e)
 		}

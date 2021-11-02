@@ -98,3 +98,15 @@ func (r *Repo) GetScene(c context.Context, userID, childBotID primitive.ObjectID
 
 	return st.Scene, nil
 }
+
+func (r *Repo) Delete(c context.Context, userID, childBotID primitive.ObjectID) error {
+	_, err := r.coll.DeleteOne(c, bson.M{
+		"ui":  userID,
+		"cbi": childBotID,
+	})
+	if err != nil {
+		return fmt.Errorf("r.coll.DeleteOne: %w", err)
+	}
+
+	return nil
+}

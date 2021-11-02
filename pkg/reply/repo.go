@@ -13,6 +13,7 @@ import (
 
 type Reply struct {
 	ID          primitive.ObjectID `bson:"_id,omitempty"`
+	ChildBotID  primitive.ObjectID `bson:"cbi,omitempty"`
 	TgUserID    int64              `bson:"tui,omitempty"`
 	TgChatID    int64              `bson:"tci,omitempty"`
 	TgMessageID int64              `bson:"tmi,omitempty"`
@@ -36,7 +37,7 @@ func NewRepo(ctx context.Context, db *mongo.Database) (*Repo, error) {
 }
 
 func (r *Repo) createIndex(ctx context.Context) error {
-	_, err := r.coll.Indexes().CreateOne(ctx, mongo.IndexModel{
+	_, err := r.coll.Indexes().CreateMany(ctx, []mongo.IndexModel{{
 		Keys: bson.D{{
 			Key:   "tui",
 			Value: 1,
@@ -46,17 +47,33 @@ func (r *Repo) createIndex(ctx context.Context) error {
 		}, {
 			Key:   "tmi",
 			Value: 1,
+		}, {
+			Key:   "cbi",
+			Value: 1,
 		}},
 		Options: options.Index().SetUnique(true),
-	})
+	}, {
+		Keys: bson.M{
+			"cbi": 1,
+		},
+	}})
 	if err != nil {
-		return fmt.Errorf("r.coll.Indexes().CreateOne: %w", err)
+		return fmt.Errorf("r.coll.Indexes().CreateMany: %w", err)
 	}
 
 	return nil
 }
 
-func (r *Repo) Create(c context.Context, tgUserID, tgChatID, tgMessageID int64) (primitive.ObjectID, error) {
+func (r *Repo) Create(
+	c context.Context,
+	childBotID primitive.ObjectID,
+	tgUserID,
+	tgChatID,
+	tgMessageID int64,
+) (
+	primitive.ObjectID,
+	error,
+) {
 	ctx, cancel := context.WithTimeout(c, 10*time.Second)
 	defer cancel()
 
@@ -66,11 +83,13 @@ func (r *Repo) Create(c context.Context, tgUserID, tgChatID, tgMessageID int64) 
 		"tui": tgUserID,
 		"tci": tgChatID,
 		"tmi": tgMessageID,
+		"cbi": childBotID,
 	}, bson.M{
 		"$setOnInsert": bson.M{
 			"tui": tgUserID,
 			"tci": tgChatID,
 			"tmi": tgMessageID,
+			"cbi": childBotID,
 		},
 	}, options.Update().SetUpsert(true))
 	if err != nil {
@@ -87,6 +106,7 @@ func (r *Repo) Create(c context.Context, tgUserID, tgChatID, tgMessageID int64) 
 		"tui": tgUserID,
 		"tci": tgChatID,
 		"tmi": tgMessageID,
+		"cbi": childBotID,
 	}, options.FindOne().SetProjection(bson.M{
 		"_id": 1,
 	})).Decode(&doc)
@@ -110,4 +130,15 @@ func (r *Repo) GetByID(c context.Context, id primitive.ObjectID) (Reply, error) 
 	}
 
 	return reply, nil
+}
+
+func (r *Repo) DeleteByChildBotID(c context.Context, childBotID primitive.ObjectID) error {
+	_, err := r.coll.DeleteMany(c, bson.M{
+		"cbi": childBotID,
+	})
+	if err != nil {
+		return fmt.Errorf("r.coll.DeleteMany: %w", err)
+	}
+
+	return nil
 }
