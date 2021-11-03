@@ -97,6 +97,28 @@ func (r *Repo) CreateMuted(c context.Context, childBotID primitive.ObjectID, tgU
 	return nil
 }
 
+func (r *Repo) CreateUnMuted(c context.Context, childBotID primitive.ObjectID, tgUserID, tgChatID int64) error {
+	ctx, cancel := context.WithTimeout(c, 10*time.Second)
+	defer cancel()
+
+	_, err := r.coll.UpdateOne(ctx, bson.M{
+		"cbi": childBotID,
+		"tui": tgUserID,
+	}, bson.M{
+		"$set": bson.M{
+			"tci": tgChatID,
+		},
+		"$unset": bson.M{
+			"m": "",
+		},
+	}, options.Update().SetUpsert(true))
+	if err != nil {
+		return fmt.Errorf("r.coll.UpdateOne: %w", err)
+	}
+
+	return nil
+}
+
 func (r *Repo) DeleteByChildBotID(c context.Context, childBotID primitive.ObjectID) error {
 	_, err := r.coll.DeleteMany(c, bson.M{
 		"cbi": childBotID,

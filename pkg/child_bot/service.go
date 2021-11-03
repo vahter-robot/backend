@@ -89,6 +89,7 @@ const (
 
 	messageForward = "✉️ "
 	mute           = "mute"
+	unmute         = "unmute"
 
 	yes   = "да"
 	no    = "нет"
@@ -304,13 +305,25 @@ func (s *service) handleOwner(ctx context.Context, api *tgbotapi.BotAPI, upd upd
 				return fmt.Errorf("s.replyRepo.GetByID: %w", er)
 			}
 
-			if text == mute {
+			switch text {
+			case mute:
 				e := s.peerRepo.CreateMuted(ctx, bot.ID, repl.TgUserID, repl.TgChatID)
 				if e != nil {
 					return fmt.Errorf("s.peerRepo.CreateMuted: %w", e)
 				}
 
 				e = s.replyOK(api, upd, "Заблокирован")
+				if e != nil {
+					return fmt.Errorf("s.replyOK: %w", e)
+				}
+				return nil
+			case unmute:
+				e := s.peerRepo.CreateUnMuted(ctx, bot.ID, repl.TgUserID, repl.TgChatID)
+				if e != nil {
+					return fmt.Errorf("s.peerRepo.CreateMuted: %w", e)
+				}
+
+				e = s.replyOK(api, upd, "Разблокирован")
 				if e != nil {
 					return fmt.Errorf("s.replyOK: %w", e)
 				}
@@ -519,12 +532,12 @@ func (s *service) handleOwnerSetKeywords(
 - Режим работы. Если указано '1' — бот применяет правила только на первое сообщение, далее не вмешивается в вашу переписку с отправителем. Если указано '2' — бот применяет правила и на первое сообщение отправителя, и на дальнейшие;
 - Перечислите через запятую ключевые слова, ожидаемые в сообщении отправителя (не более 25);
 - Затем укажите автоответ, который должен отправить бот (не более 1000 символов, может быть многострочным);
-- Далее напишите нужно ли банить отправителя, если данный фильтр сработал на его сообщение. Если указано 'да' – бот ответит отправителю, далее бот игнорирует любые сообщения от него, бот не пересылает вам ни первое ни последующие сообщения от данного пользователя. Если указано 'нет' — бот ответит отправителю, перешлет вам исходное сообщение и ответ на него, вы сможете вести переписку с отправителем анонимно через бота, а забанить можно ответив '%s';
+- Далее напишите нужно ли банить отправителя, если данный фильтр сработал на его сообщение. Если указано 'да' – бот ответит отправителю, далее бот игнорирует любые сообщения от него, бот не пересылает вам ни первое ни последующие сообщения от данного пользователя. Если указано 'нет' — бот ответит отправителю, перешлет вам исходное сообщение и ответ на него, вы сможете вести переписку с отправителем анонимно через бота, а забанить ответив '%s', разбанить '%s';
 - Все элементы с новой строки и разделены '==='.
 
 Например:
 
-1
+2
 ===
 ваканс
 ===
@@ -547,7 +560,7 @@ func (s *service) handleOwnerSetKeywords(
 ===
 Сотрудничество интересно, давайте обсудим
 ===
-нет`, mute))
+нет`, mute, unmute))
 	if err != nil {
 		return fmt.Errorf("s.reply: %w", err)
 	}
@@ -650,11 +663,12 @@ func (s *service) handlePeer(ctx context.Context, api *tgbotapi.BotAPI, upd upda
 %s / %s:
 %s
 
-'Ответить' на это сообщение текстом, чтобы ответить отправителю, или '%s' чтобы забанить его`,
+'Ответить' на это сообщение текстом, чтобы ответить отправителю, или '%s' чтобы забанить его, '%s' разбанить`,
 				messageForward, id.Hex(),
 				tplUsername(upd.Message.From.Username), tplName(upd.Message.From.FirstName),
 				text,
-				mute),
+				mute,
+				unmute),
 		})
 		if e != nil {
 			return fmt.Errorf("api.Send: %w", e)
@@ -662,11 +676,13 @@ func (s *service) handlePeer(ctx context.Context, api *tgbotapi.BotAPI, upd upda
 		return nil
 	}
 
+	lowText := strings.ToLower(text)
+
 	var match bool
 kws:
 	for _, kw := range bot.Keywords {
 		for _, in := range kw.In {
-			if strings.Contains(text, in) {
+			if strings.Contains(lowText, in) {
 				if kw.Ban {
 					e := s.peerRepo.CreateMuted(ctx, bot.ID, upd.Message.From.ID, upd.Message.Chat.ID)
 					if e != nil {
@@ -708,12 +724,13 @@ kws:
 Бот ответил:
 %s
 
-'Ответить' на это сообщение текстом, чтобы ответить отправителю, или '%s' чтобы забанить его`,
+'Ответить' на это сообщение текстом, чтобы ответить отправителю, или '%s' чтобы забанить его, '%s' разбанить`,
 							messageForward, id.Hex(),
 							tplUsername(upd.Message.From.Username), tplName(upd.Message.From.FirstName),
 							text,
 							kw.Out,
-							mute),
+							mute,
+							unmute),
 					})
 					if er != nil {
 						return fmt.Errorf("api.Send: %w", er)
@@ -740,11 +757,12 @@ kws:
 %s / %s:
 %s
 
-'Ответить' на это сообщение текстом, чтобы ответить отправителю, или '%s' чтобы забанить его`,
+'Ответить' на это сообщение текстом, чтобы ответить отправителю, или '%s' чтобы забанить его, '%s' разбанить`,
 				messageForward, id.Hex(),
 				tplUsername(upd.Message.From.Username), tplName(upd.Message.From.FirstName),
 				text,
-				mute),
+				mute,
+				unmute),
 		})
 		if e != nil {
 			return fmt.Errorf("api.Send: %w", e)
@@ -836,7 +854,7 @@ func (s *service) parseKeywordsAndMode(in string) ([]Keyword, mode, bool) {
 
 		unique := map[string]struct{}{}
 		for _, kw := range rawInKws {
-			k := strings.TrimSpace(kw)
+			k := strings.ToLower(strings.TrimSpace(kw))
 			if k == "" || utf8.RuneCountInString(k) > int(s.inLimitChars) {
 				return nil, 0, false
 			}
