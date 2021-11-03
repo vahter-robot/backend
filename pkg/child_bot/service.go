@@ -320,7 +320,7 @@ func (s *service) handleOwner(ctx context.Context, api *tgbotapi.BotAPI, upd upd
 			case unmute:
 				e := s.peerRepo.CreateUnMuted(ctx, bot.ID, repl.TgUserID, repl.TgChatID)
 				if e != nil {
-					return fmt.Errorf("s.peerRepo.CreateMuted: %w", e)
+					return fmt.Errorf("s.peerRepo.CreateUnMuted: %w", e)
 				}
 
 				e = s.replyOK(api, upd, "Разблокирован")
