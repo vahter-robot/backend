@@ -1,9 +1,9 @@
-apiVersion: networking.k8s.io/v1beta1
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: backend
   annotations:
-    kubernetes.io/ingress.class: nginx
+    kubernetes.io/ingress.class: nginx-2
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     cert-manager.io/cluster-issuer: letsencrypt
 spec:
@@ -16,12 +16,20 @@ spec:
     - host: vahter-robot-parent-bot.shopgrip.ru
       http:
         paths:
-          - backend:
-              serviceName: parent-bot
-              servicePort: 80
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: parent-bot
+                port:
+                  number: 80
     - host: vahter-robot-child-bot.shopgrip.ru
       http:
         paths:
-          - backend:
-              serviceName: child-bot
-              servicePort: 81
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: child-bot
+                port:
+                  number: 81
